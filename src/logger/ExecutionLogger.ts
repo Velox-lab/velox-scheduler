@@ -28,7 +28,7 @@ export class ExecutionLogger {
       scheduleId,
       outcome: 'success',
       txHash,
-      attemptNumber: this.getAttemptCount(scheduleId),
+      attemptNumber: this.countHistoryEntries(scheduleId),
       timestamp,
     };
 
@@ -48,7 +48,7 @@ export class ExecutionLogger {
       scheduleId,
       outcome: 'failed',
       errorMessage: error.message,
-      attemptNumber: this.getAttemptCount(scheduleId),
+      attemptNumber: this.countHistoryEntries(scheduleId),
       timestamp,
     };
 
@@ -93,7 +93,7 @@ export class ExecutionLogger {
     this.history.set(scheduleId, [...existing, record]);
   }
 
-  private getAttemptCount(scheduleId: string): number {
+  private countHistoryEntries(scheduleId: string): number {
     return (this.history.get(scheduleId) ?? []).length + 1;
   }
 }
