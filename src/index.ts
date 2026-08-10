@@ -1,5 +1,11 @@
+import * as StellarSdk from '@stellar/stellar-sdk';
 import dotenv from 'dotenv';
 import { SchedulerEngine } from './engine/SchedulerEngine';
+import { ChainPoller } from './poller/ChainPoller';
+import { ExecutionQueue } from './queue/ExecutionQueue';
+import { PaymentExecutor } from './executor/PaymentExecutor';
+import { RetryHandler } from './executor/RetryHandler';
+import { ExecutionLogger } from './logger/ExecutionLogger';
 import { SchedulerConfig } from './types';
 
 dotenv.config();
@@ -31,9 +37,26 @@ function loadConfig(): SchedulerConfig {
   };
 }
 
+function buildEngine(config: SchedulerConfig): SchedulerEngine {
+  const networkPassphrase =
+    config.stellarNetwork === 'mainnet'
+      ? StellarSdk.Networks.PUBLIC
+      : StellarSdk.Networks.TESTNET;
+
+  return new SchedulerEngine({
+    poller: new ChainPoller(config.horizonUrl, config.registryContractId),
+    queue: new ExecutionQueue(),
+    executor: new PaymentExecutor(config.horizonUrl, networkPassphrase),
+    retryHandler: new RetryHandler(config.maxRetryAttempts),
+    logger: new ExecutionLogger(config.logLevel),
+    operatorKeypair: StellarSdk.Keypair.fromSecret(config.operatorSecretKey),
+    pollIntervalMs: config.pollIntervalMs,
+  });
+}
+
 async function main(): Promise<void> {
   const config = loadConfig();
-  const engine = new SchedulerEngine(config);
+  const engine = buildEngine(config);
 
   process.on('SIGINT', () => {
     console.log('Shutting down velox-scheduler...');

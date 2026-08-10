@@ -4,14 +4,29 @@ import { ExecutionQueue } from '../queue/ExecutionQueue';
 import { PaymentExecutor } from '../executor/PaymentExecutor';
 import { RetryHandler } from '../executor/RetryHandler';
 import { ExecutionLogger } from '../logger/ExecutionLogger';
-import { SchedulerConfig, Schedule } from '../types';
+import { Schedule } from '../types';
+
+/**
+ * Dependencies injected into SchedulerEngine.
+ * Defined as an interface so each can be mocked independently in tests.
+ */
+export interface SchedulerEngineDeps {
+  poller: ChainPoller;
+  queue: ExecutionQueue;
+  executor: PaymentExecutor;
+  retryHandler: RetryHandler;
+  logger: ExecutionLogger;
+  operatorKeypair: StellarSdk.Keypair;
+  pollIntervalMs: number;
+}
 
 /**
  * SchedulerEngine — the main loop of the velox-scheduler daemon.
  *
- * Orchestrates the full poll → filter → execute → log cycle.
- * Contains no business logic of its own — delegates everything
- * to specialised modules.
+ * Orchestrates the full poll → enqueue → execute → log cycle.
+ * Contains no business logic of its own — delegates everything to
+ * injected modules. All dependencies are injected via constructor,
+ * making this class fully testable without a live network.
  */
 export class SchedulerEngine {
   private readonly poller: ChainPoller;
@@ -25,29 +40,24 @@ export class SchedulerEngine {
   private running: boolean = false;
   private timer: NodeJS.Timeout | null = null;
 
-  constructor(config: SchedulerConfig) {
-    this.poller = new ChainPoller(config.horizonUrl, config.registryContractId);
-    this.queue = new ExecutionQueue();
-    this.executor = new PaymentExecutor(
-      config.horizonUrl,
-      config.stellarNetwork === 'mainnet'
-        ? StellarSdk.Networks.PUBLIC
-        : StellarSdk.Networks.TESTNET
-    );
-    this.retryHandler = new RetryHandler(config.maxRetryAttempts);
-    this.logger = new ExecutionLogger(config.logLevel);
-    this.operatorKeypair = StellarSdk.Keypair.fromSecret(config.operatorSecretKey);
-    this.pollIntervalMs = config.pollIntervalMs;
+  constructor(deps: SchedulerEngineDeps) {
+    this.poller = deps.poller;
+    this.queue = deps.queue;
+    this.executor = deps.executor;
+    this.retryHandler = deps.retryHandler;
+    this.logger = deps.logger;
+    this.operatorKeypair = deps.operatorKeypair;
+    this.pollIntervalMs = deps.pollIntervalMs;
   }
 
-  /** Start the scheduler daemon. Begins polling immediately. */
+  /** Start the scheduler daemon. Begins the polling loop immediately. */
   start(): void {
     if (this.running) return;
     this.running = true;
     this.scheduleNextCycle();
   }
 
-  /** Gracefully stop the scheduler daemon. */
+  /** Gracefully stop the scheduler daemon and clear the queue. */
   stop(): void {
     this.running = false;
     if (this.timer) {
@@ -57,7 +67,7 @@ export class SchedulerEngine {
     this.queue.clear();
   }
 
-  /** Execute one full poll → enqueue → execute → log cycle. */
+  /** Execute one full poll → enqueue → dequeue → execute cycle. */
   async runCycle(): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
 
@@ -73,7 +83,7 @@ export class SchedulerEngine {
 
   // ── Private helpers ─────────────────────────────────────────────────────────
 
-  /** Execute a single scheduled payment with retry and logging. */
+  /** Execute a single scheduled payment with retry on failure. */
   private async executeSchedule(schedule: Schedule): Promise<void> {
     try {
       const tx = await this.executor.buildTransaction(schedule, this.operatorKeypair);
@@ -90,30 +100,36 @@ export class SchedulerEngine {
         );
       }
     } catch (err) {
-      const error = this.executor.classifyError(err);
-      const timestamp = Math.floor(Date.now() / 1000);
-
-      if (
-        this.retryHandler.shouldRetry(error) &&
-        !this.retryHandler.hasExceededMaxRetries(schedule.scheduleId)
-      ) {
-        this.retryHandler.incrementAttempt(schedule.scheduleId);
-        const attempt = this.retryHandler.getAttemptCount(schedule.scheduleId);
-        this.logger.logRetry(schedule.scheduleId, attempt, timestamp);
-
-        const delay = this.retryHandler.getNextRetryDelayMs(attempt);
-        setTimeout(() => this.executeSchedule(schedule), delay);
-      } else {
-        this.logger.logFailure(
-          schedule.scheduleId,
-          new Error(error.message),
-          timestamp
-        );
-      }
+      this.handleExecutionError(schedule, err);
     }
   }
 
-  /** Schedule the next cycle after pollIntervalMs. */
+  /** Handle a failed execution — retry if eligible, otherwise log as failed. */
+  private handleExecutionError(schedule: Schedule, err: unknown): void {
+    const error = this.executor.classifyError(err);
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    const canRetry =
+      this.retryHandler.shouldRetry(error) &&
+      !this.retryHandler.hasExceededMaxRetries(schedule.scheduleId);
+
+    if (canRetry) {
+      this.retryHandler.incrementAttempt(schedule.scheduleId);
+      const attempt = this.retryHandler.getAttemptCount(schedule.scheduleId);
+      this.logger.logRetry(schedule.scheduleId, attempt, timestamp);
+      this.scheduleRetry(schedule, attempt);
+    } else {
+      this.logger.logFailure(schedule.scheduleId, new Error(error.message), timestamp);
+    }
+  }
+
+  /** Schedule a retry for a failed payment after exponential backoff delay. */
+  private scheduleRetry(schedule: Schedule, attemptNumber: number): void {
+    const delay = this.retryHandler.getNextRetryDelayMs(attemptNumber);
+    setTimeout(() => this.executeSchedule(schedule), delay);
+  }
+
+  /** Schedule the next polling cycle after pollIntervalMs. */
   private scheduleNextCycle(): void {
     if (!this.running) return;
 
