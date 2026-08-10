@@ -46,46 +46,46 @@ The main loop. Orchestrates the polling, filtering, execution, and logging cycle
 
 - `start()` — boots the daemon and begins the main loop
 - `stop()` — gracefully shuts down the daemon
-- `run_cycle()` — executes one full poll → filter → execute → log cycle
+- `runCycle()` — executes one full poll → filter → execute → log cycle
 
 ### `ChainPoller`
 Reads on-chain state from the Velox contracts via Stellar's Horizon RPC.
 
-- `fetch_due_schedules(current_time)` — returns all schedules where payment is due
-- `fetch_stream_status(stream_id)` — checks if a stream is still active
-- `fetch_registry_snapshot()` — pulls all registered jobs from `VeloxRegistry`
+- `fetchDueSchedules(currentTime)` — returns all schedules where payment is due
+- `fetchStreamStatus(streamId)` — checks if a stream is still active
+- `fetchRegistrySnapshot()` — pulls all registered jobs from `VeloxRegistry`
 
 ### `PaymentExecutor`
 Builds, signs, and submits Stellar transactions for due payments.
 
-- `build_transaction(schedule)` — constructs the XDR transaction envelope
-- `sign_transaction(tx, keypair)` — signs with the operator keypair
-- `submit_transaction(signed_tx)` — submits to Horizon and returns result
-- `handle_submission_result(result)` — handles success, retry, or failure
+- `buildTransaction(schedule)` — constructs the XDR transaction envelope
+- `signTransaction(tx, keypair)` — signs with the operator keypair
+- `submitTransaction(signedTx)` — submits to Horizon and returns result
+- `handleSubmissionResult(result)` — handles success, retry, or failure
 
 ### `ExecutionQueue`
 An in-memory priority queue of upcoming payments, sorted by execution time.
 
 - `enqueue(schedule)` — adds a schedule to the queue
-- `dequeue_due(current_time)` — pops all schedules due at or before now
-- `peek_next()` — returns the next due item without removing it
+- `dequeueDue(currentTime)` — pops all schedules due at or before now
+- `peekNext()` — returns the next due item without removing it
 - `clear()` — resets the queue (used on restart)
 
 ### `ExecutionLogger`
 Records every payment attempt, success, and failure with full context.
 
-- `log_success(schedule_id, tx_hash, timestamp)`
-- `log_failure(schedule_id, error, timestamp)`
-- `log_retry(schedule_id, attempt_number, timestamp)`
-- `get_execution_history(schedule_id)`
+- `logSuccess(scheduleId, txHash, timestamp)`
+- `logFailure(scheduleId, error, timestamp)`
+- `logRetry(scheduleId, attemptNumber, timestamp)`
+- `getExecutionHistory(scheduleId)`
 
 ### `RetryHandler`
 Manages retry logic for failed payment submissions with exponential backoff.
 
-- `should_retry(error)` — determines if an error is retryable
-- `get_next_retry_time(attempt_number)` — calculates backoff delay
-- `increment_attempt(schedule_id)` — tracks attempt count per schedule
-- `has_exceeded_max_retries(schedule_id)` — flags permanently failed jobs
+- `shouldRetry(error)` — determines if an error is retryable
+- `getNextRetryTime(attemptNumber)` — calculates backoff delay
+- `incrementAttempt(scheduleId)` — tracks attempt count per schedule
+- `hasExceededMaxRetries(scheduleId)` — flags permanently failed jobs
 
 ---
 
@@ -232,7 +232,7 @@ velox-scheduler/
 
 ## Contributing
 
-This repository is part of the **Velox** open-source project on the Stellar ecosystem. Contributions are welcome and rewarded through the Stellar Wave Program.
+This repository is part of the **Velox** open-source project built on the Stellar ecosystem. Contributions are welcome.
 
 **Before you contribute:**
 1. Read the [Contributing Guide](CONTRIBUTING.md)
