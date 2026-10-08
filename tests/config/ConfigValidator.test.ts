@@ -28,7 +28,7 @@ describe('ConfigValidator', () => {
   });
 
   it('returns error for invalid network value', () => {
-    const config = { ...validConfig(), stellarNetwork: 'devnet' as any };
+    const config = { ...validConfig(), stellarNetwork: 'devnet' as SchedulerConfig['stellarNetwork'] };
     const result = validator.validate(config);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("stellarNetwork must be 'testnet' or 'mainnet', got 'devnet'");
@@ -90,7 +90,7 @@ describe('ConfigValidator', () => {
   it('collects multiple errors at once', () => {
     const config = {
       ...validConfig(),
-      stellarNetwork: 'bad' as any,
+      stellarNetwork: 'bad' as SchedulerConfig['stellarNetwork'],
       horizonUrl: '',
       operatorSecretKey: '',
     };

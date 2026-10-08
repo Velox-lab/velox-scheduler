@@ -1,5 +1,5 @@
 import winston from 'winston';
-import { ExecutionRecord, ExecutionOutcome } from '../types';
+import { ExecutionRecord } from '../types';
 
 /**
  * ExecutionLogger — structured audit logger for all payment execution events.
