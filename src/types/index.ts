@@ -22,6 +22,12 @@ export interface ExecutionResult {
   timestamp: number;
 }
 
+/** Final on-chain result of a submitted transaction. */
+export interface SubmissionResult {
+  hash: string;
+  successful: boolean;
+}
+
 export interface SubmissionError {
   code: string;
   message: string;
@@ -41,7 +47,6 @@ export interface ExecutionRecord {
 
 export interface SchedulerConfig {
   stellarNetwork: 'testnet' | 'mainnet';
-  horizonUrl: string;
   sorobanRpcUrl: string;
   operatorSecretKey: string;
   registryContractId: string;

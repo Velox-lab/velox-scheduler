@@ -29,7 +29,7 @@ Soroban contracts on Stellar cannot schedule themselves. A recurring payment con
 │  1. Poll VeloxRegistry (on-chain) for due jobs   │
 │  2. Filter by next_payment_time <= now           │
 │  3. Build and sign the Stellar transaction       │
-│  4. Submit to Stellar Horizon RPC                │
+│  4. Submit via Soroban RPC                       │
 │  5. Record execution result                      │
 │  6. Sleep → Repeat                               │
 └──────────────────────────────────────────────────┘
@@ -49,18 +49,19 @@ The main loop. Orchestrates the polling, filtering, execution, and logging cycle
 - `runCycle()` — executes one full poll → filter → execute → log cycle
 
 ### `ChainPoller`
-Reads on-chain state from the Velox contracts via Stellar's Horizon RPC.
+Reads on-chain state from the Velox contracts by simulating read-only contract calls over Soroban RPC.
 
 - `fetchDueSchedules(currentTime)` — returns all schedules where payment is due
-- `fetchStreamStatus(streamId)` — checks if a stream is still active
+- `fetchSchedule(scheduleId)` — reads one schedule's full state via `get_schedule_info`
+- `fetchScheduleStatus(scheduleId)` — checks if a schedule is still active
 - `fetchRegistrySnapshot()` — pulls all registered jobs from `VeloxRegistry`
 
 ### `PaymentExecutor`
 Builds, signs, and submits Stellar transactions for due payments.
 
-- `buildTransaction(schedule)` — constructs the XDR transaction envelope
+- `buildTransaction(schedule, keypair)` — builds an `execute_payment` invocation and prepares it (simulation adds footprint and fees)
 - `signTransaction(tx, keypair)` — signs with the operator keypair
-- `submitTransaction(signedTx)` — submits to Horizon and returns result
+- `submitTransaction(signedTx)` — sends via Soroban RPC and polls until the transaction is final
 - `handleSubmissionResult(result)` — handles success, retry, or failure
 
 ### `ExecutionQueue`
@@ -117,7 +118,7 @@ Mocking is used extensively so the scheduler can be tested without a live Stella
 ### SOLID Principles
 - **Single Responsibility** — `ChainPoller` only reads. `PaymentExecutor` only submits. `ExecutionLogger` only logs. No module wears two hats.
 - **Open/Closed** — New chain integrations or execution strategies can be added without modifying existing modules.
-- **Liskov Substitution** — Any poller implementation can be substituted (e.g., swap Horizon for Soroban RPC) without breaking the engine.
+- **Liskov Substitution** — Any poller implementation can be substituted (e.g., a mock RPC server in tests) without breaking the engine.
 - **Interface Segregation** — Each module exposes only the interface its consumers need.
 - **Dependency Inversion** — `SchedulerEngine` depends on abstractions (interfaces), not concrete implementations. This makes testing trivial.
 
@@ -169,9 +170,9 @@ Edit `.env`:
 
 ```env
 STELLAR_NETWORK=testnet
-HORIZON_URL=https://horizon-testnet.stellar.org
 SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 OPERATOR_SECRET_KEY=S...
+REGISTRY_CONTRACT_ID=C...
 POLL_INTERVAL_MS=10000
 MAX_RETRY_ATTEMPTS=3
 LOG_LEVEL=info
@@ -252,12 +253,12 @@ This repository is part of the **Velox** open-source project built on the Stella
 ## Roadmap
 
 - [x] Project scaffold and architecture design
-- [ ] `ExecutionQueue` — priority queue implementation
-- [ ] `ChainPoller` — Horizon RPC integration
-- [ ] `PaymentExecutor` — transaction builder and submitter
-- [ ] `RetryHandler` — exponential backoff logic
-- [ ] `ExecutionLogger` — structured logging
-- [ ] `SchedulerEngine` — main loop
+- [x] `ExecutionQueue` — priority queue implementation
+- [x] `ChainPoller` — Soroban RPC integration
+- [x] `PaymentExecutor` — transaction builder and submitter
+- [x] `RetryHandler` — exponential backoff logic
+- [x] `ExecutionLogger` — structured logging
+- [x] `SchedulerEngine` — main loop
 - [ ] Full test coverage (target: 95%+)
 - [ ] Docker support
 - [ ] Monitoring & alerting integration

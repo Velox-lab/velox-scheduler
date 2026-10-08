@@ -33,7 +33,7 @@ The architecture is deliberately modular. Each module has a single responsibilit
 └──────────────────────────────────────────────────────────────┘
          │                        │
          ▼                        ▼
-  Stellar Horizon RPC      VeloxRegistry (on-chain)
+  Soroban RPC              VeloxRegistry (on-chain)
 ```
 
 ---
@@ -97,10 +97,11 @@ The engine does not know how polling works, how transactions are built, or how r
 
 **Responsibility:** Read state from the Stellar network. Never write.
 
-`ChainPoller` is the eyes of the scheduler. It queries `VeloxRegistry` and individual contract state via Stellar's Horizon and Soroban RPC endpoints.
+`ChainPoller` is the eyes of the scheduler. It reads `VeloxRegistry.get_all_schedules` and each schedule's `get_schedule_info` by simulating read-only contract calls over Soroban RPC. A schedule that cannot be read is reported and skipped; a registry read failure fails the cycle.
 
 - `fetchDueSchedules(currentTime: number): Promise<Schedule[]>`
-- `fetchStreamStatus(streamId: string): Promise<StreamStatus>`
+- `fetchSchedule(scheduleId: string): Promise<Schedule>`
+- `fetchScheduleStatus(scheduleId: string): Promise<ScheduleStatus>`
 - `fetchRegistrySnapshot(): Promise<Schedule[]>`
 
 It returns plain data objects. It has no knowledge of queues, executors, or loggers.
@@ -110,12 +111,13 @@ It returns plain data objects. It has no knowledge of queues, executors, or logg
 ```typescript
 interface IChainPoller {
   fetchDueSchedules(currentTime: number): Promise<Schedule[]>
-  fetchStreamStatus(streamId: string): Promise<StreamStatus>
+  fetchSchedule(scheduleId: string): Promise<Schedule>
+  fetchScheduleStatus(scheduleId: string): Promise<ScheduleStatus>
   fetchRegistrySnapshot(): Promise<Schedule[]>
 }
 ```
 
-This interface allows the real Horizon-backed implementation to be swapped with a mock in tests.
+The RPC server is injected, so tests substitute a mock that returns encoded contract values.
 
 ---
 
@@ -147,9 +149,9 @@ dequeueDue(now=1600):
 
 **Responsibility:** Build, sign, and submit a single Stellar transaction for a due payment.
 
-`PaymentExecutor` is the hands of the scheduler. It interacts with the Stellar SDK and Horizon RPC to construct and submit transactions.
+`PaymentExecutor` is the hands of the scheduler. It builds an `execute_payment` invocation, prepares it through Soroban RPC simulation (footprint and resource fees), signs it, sends it, and polls until the transaction is final.
 
-- `buildTransaction(schedule: Schedule): Promise<Transaction>`
+- `buildTransaction(schedule: Schedule, keypair: Keypair): Promise<Transaction>`
 - `signTransaction(tx: Transaction, keypair: Keypair): SignedTransaction`
 - `submitTransaction(signedTx: SignedTransaction): Promise<SubmissionResult>`
 - `handleSubmissionResult(result: SubmissionResult): ExecutionOutcome`
@@ -242,7 +244,7 @@ max_delay = 60_000ms (1 minute cap)
 │  4. For each due schedule:                          │
 │     a. PaymentExecutor builds the transaction       │
 │     b. Transaction is signed with operator keypair  │
-│     c. Transaction is submitted to Horizon          │
+│     c. Transaction is sent via Soroban RPC          │
 │     d. On success → ExecutionLogger.logSuccess()   │
 │     e. On failure → RetryHandler.shouldRetry()?    │
 │        - Yes → schedule re-enqueue with backoff    │
@@ -280,9 +282,9 @@ All runtime configuration is injected via environment variables. No hardcoded va
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `STELLAR_NETWORK` | `testnet` or `mainnet` | `testnet` |
-| `HORIZON_URL` | Horizon RPC endpoint | testnet URL |
 | `SOROBAN_RPC_URL` | Soroban RPC endpoint | testnet URL |
 | `OPERATOR_SECRET_KEY` | Signing keypair secret | required |
+| `REGISTRY_CONTRACT_ID` | VeloxRegistry contract address | required |
 | `POLL_INTERVAL_MS` | Milliseconds between cycles | `10000` |
 | `MAX_RETRY_ATTEMPTS` | Max retries per schedule | `3` |
 | `LOG_LEVEL` | `debug`, `info`, `warn`, `error` | `info` |
@@ -296,9 +298,9 @@ Following strict TDD — every module's tests are written before its implementat
 | Module | Test approach |
 |--------|--------------|
 | `SchedulerEngine` | Full cycle tested with all mocked dependencies |
-| `ChainPoller` | Mocked Horizon/RPC responses |
+| `ChainPoller` | Mocked Soroban RPC simulation responses |
 | `ExecutionQueue` | Pure unit tests — no external dependencies |
-| `PaymentExecutor` | Mocked SDK and Horizon submission |
+| `PaymentExecutor` | Mocked Soroban RPC prepare, send and poll |
 | `RetryHandler` | Pure unit tests — deterministic backoff math |
 | `ExecutionLogger` | Output format and field validation |
 

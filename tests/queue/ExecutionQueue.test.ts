@@ -33,6 +33,13 @@ describe('ExecutionQueue', () => {
 
       expect(queue.peekNext()!.scheduleId).toBe('s1');
     });
+
+    it('ignores a schedule that is already queued', () => {
+      queue.enqueue(makeSchedule('s1', 1000));
+      queue.enqueue(makeSchedule('s1', 1000));
+
+      expect(queue.size()).toBe(1);
+    });
   });
 
   describe('dequeueDue', () => {
