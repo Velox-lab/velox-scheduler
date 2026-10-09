@@ -28,22 +28,17 @@ To reliably communicate with the ledger, the scheduler node requires access to s
 ## 4. Running in Production
 
 ### Option A: Using a Process Manager (PM2)
-To guarantee high uptime and automatic restarts if the process crashes, deploy using a process manager:
+Deploy using PM2 to ensure automatic restarts and high uptime:
 
 ```bash
-# Install the process manager globally
-npm install pm2 -g
-
-# Launch the scheduler engine application
-pm2 start dist/index.js --name "velox-scheduler"
-
-# Save the process status for system reboots
-pm2 startup
+npm install pm2 -g 
+pm2 start dist/index.js --name "velox-scheduler" 
+pm2 startup 
 pm2 save
 ```
 
 ### Option B: Using Docker (Recommended)
-For structured sandbox deployments, initialize the runtime engine via containerization:
+Containerize the runtime engine for structured deployments:
 
 ```bash
 docker run -d \
@@ -55,6 +50,7 @@ docker run -d \
   -e REGISTRY_CONTRACT_ID="your_registry_contract_id_here" \
   velox-scheduler:latest
 ```
+
 
 ## 5. Reading System Logs
 Routine log inspection ensures the synchronization tasks are executing properly within the defined polling intervals.
