@@ -17,7 +17,6 @@ export class ConfigValidator {
     const errors: string[] = [];
 
     this.validateNetwork(config.stellarNetwork, errors);
-    this.validateUrl('horizonUrl', config.horizonUrl, errors);
     this.validateUrl('sorobanRpcUrl', config.sorobanRpcUrl, errors);
     this.validateSecretKey(config.operatorSecretKey, errors);
     this.validateContractId(config.registryContractId, errors);

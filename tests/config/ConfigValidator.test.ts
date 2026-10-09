@@ -4,7 +4,6 @@ import { SchedulerConfig } from '../../src/types';
 function validConfig(): SchedulerConfig {
   return {
     stellarNetwork: 'testnet',
-    horizonUrl: 'https://horizon-testnet.stellar.org',
     sorobanRpcUrl: 'https://soroban-testnet.stellar.org',
     operatorSecretKey: 'SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
     registryContractId: 'CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
@@ -28,24 +27,24 @@ describe('ConfigValidator', () => {
   });
 
   it('returns error for invalid network value', () => {
-    const config = { ...validConfig(), stellarNetwork: 'devnet' as any };
+    const config = { ...validConfig(), stellarNetwork: 'devnet' as SchedulerConfig['stellarNetwork'] };
     const result = validator.validate(config);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("stellarNetwork must be 'testnet' or 'mainnet', got 'devnet'");
   });
 
-  it('returns error when horizonUrl is empty', () => {
-    const config = { ...validConfig(), horizonUrl: '' };
+  it('returns error when sorobanRpcUrl is empty', () => {
+    const config = { ...validConfig(), sorobanRpcUrl: '' };
     const result = validator.validate(config);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.includes('horizonUrl'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('sorobanRpcUrl'))).toBe(true);
   });
 
-  it('returns error when horizonUrl does not start with https', () => {
-    const config = { ...validConfig(), horizonUrl: 'http://horizon-testnet.stellar.org' };
+  it('returns error when sorobanRpcUrl does not start with https', () => {
+    const config = { ...validConfig(), sorobanRpcUrl: 'http://soroban-testnet.stellar.org' };
     const result = validator.validate(config);
     expect(result.valid).toBe(false);
-    expect(result.errors).toContain('horizonUrl must start with https://');
+    expect(result.errors).toContain('sorobanRpcUrl must start with https://');
   });
 
   it('returns error when operatorSecretKey is empty', () => {
@@ -90,8 +89,8 @@ describe('ConfigValidator', () => {
   it('collects multiple errors at once', () => {
     const config = {
       ...validConfig(),
-      stellarNetwork: 'bad' as any,
-      horizonUrl: '',
+      stellarNetwork: 'bad' as SchedulerConfig['stellarNetwork'],
+      sorobanRpcUrl: '',
       operatorSecretKey: '',
     };
     const result = validator.validate(config);

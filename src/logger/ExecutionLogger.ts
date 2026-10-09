@@ -1,5 +1,5 @@
 import winston from 'winston';
-import { ExecutionRecord, ExecutionOutcome } from '../types';
+import { ExecutionRecord } from '../types';
 
 /**
  * ExecutionLogger — structured audit logger for all payment execution events.
@@ -79,6 +79,25 @@ export class ExecutionLogger {
     });
 
     this.appendToHistory(scheduleId, record);
+  }
+
+  /** Log a polling cycle that failed before any payment could be attempted. */
+  logCycleError(error: Error, timestamp: number): void {
+    this.logger.error({
+      event: 'cycle_failed',
+      error: error.message,
+      timestamp,
+    });
+  }
+
+  /** Log a schedule whose on-chain state could not be read. */
+  logReadError(scheduleId: string, error: Error, timestamp: number): void {
+    this.logger.warn({
+      event: 'schedule_read_failed',
+      scheduleId,
+      error: error.message,
+      timestamp,
+    });
   }
 
   /** Return the full execution history for a given schedule. */

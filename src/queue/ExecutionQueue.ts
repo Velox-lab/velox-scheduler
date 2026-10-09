@@ -9,8 +9,9 @@ import { Schedule } from '../types';
 export class ExecutionQueue {
   private queue: Schedule[] = [];
 
-  /** Add a schedule to the queue, maintaining heap order. */
+  /** Add a schedule to the queue, maintaining heap order. Ignores a schedule already queued. */
   enqueue(schedule: Schedule): void {
+    if (this.queue.some((s) => s.scheduleId === schedule.scheduleId)) return;
     this.queue.push(schedule);
     this.queue.sort((a, b) => a.nextPaymentTime - b.nextPaymentTime);
   }

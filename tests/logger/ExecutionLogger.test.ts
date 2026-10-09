@@ -66,4 +66,13 @@ describe('ExecutionLogger', () => {
       expect(logger.getExecutionHistory('s2')).toHaveLength(1);
     });
   });
+
+  describe('logCycleError and logReadError', () => {
+    it('do not add entries to payment execution history', () => {
+      logger.logCycleError(new Error('rpc unavailable'), 1000);
+      logger.logReadError('s1', new Error('contract not found'), 1000);
+
+      expect(logger.getExecutionHistory('s1')).toEqual([]);
+    });
+  });
 });
