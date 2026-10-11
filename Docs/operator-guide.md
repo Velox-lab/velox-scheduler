@@ -1,65 +1,63 @@
-# Operator Running Guide
+# Operator Running Guide 
+  
+This guide provides instructions for configuring, funding, and running the scheduler node in production on the Stellar network. 
+  
+--- 
+  
+## 1. Creating and Funding the Operator Account 
+The scheduler requires a dedicated account to sign and execute transactions. 
+  
+* **Generate Keypair:** Create an independent Stellar keypair for this node. The secret key starts with `S`. 
+* **Funding (Testnet):** Fund the public key using the Stellar Friendbot faucet. 
+* **Funding (Mainnet):** Maintain a native XLM balance to cover transaction fees and base reserves. 
+* **Token Approvals:** Senders must explicitly approve each schedule on the targeted token contract before execution. 
+  
+## 2. Finding the VeloxRegistry Contract ID 
+The scheduler tracks a registry contract to verify automation schedules. 
+  
+* **Testnet:** Locate the active contract ID (starts with `C`) in `ARCHITECTURE.md` or your deployment logs. 
+* **Mainnet:** Reference official production deployment logs. 
+* **Variable:** Set this value as `REGISTRY_CONTRACT_ID` in your environment.
+  
+## 3. Choosing a Soroban RPC Provider 
+The node requires access to standard network endpoints to communicate with the ledger. 
+  
+* **Endpoints:** Configure `SOROBAN_RPC_URL` and `HORIZON_URL`. 
+* **Providers:** Use public endpoints from the Stellar Development Foundation (SDF) or a dedicated infrastructure provider. 
+  
+## 4. Running in Production 
+  
+### Option A: Process Manager (PM2) 
+```bash 
+npm install pm2 -g  
+pm2 start dist/index.js --name "velox-scheduler"  
+pm2 startup  
+pm2 save 
+``` 
+  
+### Option B: Docker (Recommended) 
+```bash 
+# Build the image
+docker build -t velox-scheduler:latest .
 
-This guide provides step-by-step instructions for operators to configure, fund, and run the scheduler node in production environments on the Stellar network.
-
----
-
-## 1. Creating and Funding the Operator Account
-The scheduler requires a dedicated operator account to sign and execute scheduled transactions.
-
-1. **Generate a Keypair:** Create an independent, dedicated Stellar keypair for this operator node. Do not reuse deployment or administrative keys. Your secret key will begin with the character `S`.
-2. **Fund the Address:**
-   * **Testnet:** Use the public Stellar Friendbot faucet to fund your public key with testnet XLM.
-   * **Mainnet:** Deposit native XLM into the operator address to maintain a sufficient balance for transaction gas fees.
-   * *Note:* Senders interacting with the scheduler must explicitly approve each schedule on the targeted token contract before execution.
-
-## 2. Finding the VeloxRegistry Contract ID
-The scheduler listens to a specific registry contract to verify valid automation schedules.
-
-* **Testnet:** Retrieve the active `VeloxRegistry` contract ID (beginning with `C`) explicitly listed in the project’s `ARCHITECTURE.md` file or deployment output logs.
-* **Mainnet:** Reference the official production deployment logs or verified ledger records to locate the live contract address.
-
-## 3. Choosing a Soroban RPC Provider
-To reliably communicate with the ledger, the scheduler node requires access to standard network endpoints.
-
-* **Network Endpoints:** Configure the `SOROBAN_RPC_URL` (e.g., `https://stellar.org`) alongside the corresponding `HORIZON_URL` provider URL.
-* **Infrastructure Options:** Utilize official public endpoints from the Stellar Development Foundation (SDF) or high-availability infrastructure node providers.
-
-## 4. Running in Production
-
-### Option A: Using a Process Manager (PM2)
-Deploy using PM2 to ensure automatic restarts and high uptime:
-
-```bash
-npm install pm2 -g 
-pm2 start dist/index.js --name "velox-scheduler" 
-pm2 startup 
-pm2 save
-```
-
-### Option B: Using Docker (Recommended)
-Containerize the runtime engine for structured deployments:
-
-```bash
-docker run -d \
-  --name velox-scheduler \
-  --restart unless-stopped \
-  -e STELLAR_NETWORK="testnet" \
-  -e OPERATOR_SECRET_KEY="your_secret_key_here" \
-  -e SOROBAN_RPC_URL="your_soroban_rpc_url_here" \
-  -e REGISTRY_CONTRACT_ID="your_registry_contract_id_here" \
-  velox-scheduler:latest
-```
-
-
-## 5. Reading System Logs
-Routine log inspection ensures the synchronization tasks are executing properly within the defined polling intervals.
-
-* **When deployed via PM2:**
-  ```bash
-  pm2 logs velox-scheduler
-  ```
-* **When deployed via Docker:**
-  ```bash
-  docker logs -f velox-scheduler
-  ```
+# Run the container
+docker run -d \ 
+   --name velox-scheduler \ 
+   --restart unless-stopped \ 
+   -e STELLAR_NETWORK="testnet" \ 
+   -e OPERATOR_SECRET_KEY="your_secret_key_here" \ 
+   -e SOROBAN_RPC_URL="your_soroban_rpc_url_here" \ 
+   -e REGISTRY_CONTRACT_ID="your_registry_contract_id_here" \ 
+   velox-scheduler:latest 
+``` 
+  
+## 5. Reading System Logs 
+  
+* **PM2 Logs:** 
+   ```bash 
+   pm2 logs velox-scheduler 
+   ``` 
+* **Docker Logs:** 
+   ```bash 
+   docker logs -f velox-scheduler 
+   ```
