@@ -1,5 +1,7 @@
 # velox-scheduler
 
+[![CI](https://github.com/Velox-lab/velox-scheduler/actions/workflows/ci.yml/badge.svg)](https://github.com/Velox-lab/velox-scheduler/actions/workflows/ci.yml)
+
 > Off-chain scheduler daemon that monitors the Stellar network and triggers on-chain payment streams at precisely the right time.
 
 ---
