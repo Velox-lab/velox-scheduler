@@ -241,14 +241,10 @@ This repository is part of the **Velox** open-source project built on the Stella
 1. Read the [Contributing Guide](CONTRIBUTING.md)
 2. Check open issues labeled `good first issue` or `help wanted`
 3. Follow the TDD workflow — write your test before your implementation
-4. Ensure `npm test` passes before submitting a PR
+4. Run the checks listed in the Contributing Guide before submitting a PR
 5. One concern per PR — keep it focused
 
-**Good first issues include:**
-- Implementing `peek_next` in `ExecutionQueue`
-- Writing unit tests for `RetryHandler.get_next_retry_time`
-- Adding structured log fields to `ExecutionLogger`
-- Implementing the `stop()` method in `SchedulerEngine` with graceful shutdown
+**Looking for something to work on?** See the open issues labeled [`good first issue`](https://github.com/Velox-lab/velox-scheduler/labels/good%20first%20issue) and [`help wanted`](https://github.com/Velox-lab/velox-scheduler/labels/help%20wanted).
 
 ---
 
