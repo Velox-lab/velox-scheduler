@@ -134,8 +134,11 @@ export class SchedulerEngine {
     const error = this.executor.classifyError(err);
     const timestamp = Math.floor(Date.now() / 1000);
 
-    // Local clock ran ahead of ledger time; the next cycle will pick it up again
-    if (error.code === 'NOT_DUE') {
+    // Not a failure worth logging or retrying:
+    // NOT_DUE means our local clock ran ahead of ledger time, the next cycle
+    // picks it up again; SCHEDULE_INACTIVE means it was cancelled between
+    // being enqueued and executed.
+    if (error.code === 'NOT_DUE' || error.code === 'SCHEDULE_INACTIVE') {
       this.release(schedule.scheduleId);
       return;
     }
