@@ -179,6 +179,7 @@ POLL_INTERVAL_MS=10000
 MAX_RETRY_ATTEMPTS=3
 LOG_LEVEL=info
 ```
+For detailed production instructions, check out the [Operator Running Guide](docs/operator-guide.md).
 
 ### Run
 
