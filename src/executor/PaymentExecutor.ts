@@ -91,14 +91,21 @@ export class PaymentExecutor {
     return 'failed';
   }
 
-  /** Classify a raw error into a typed SubmissionError for RetryHandler. */
+  /**
+   * Classify a raw error into a typed SubmissionError for RetryHandler.
+   *
+   * RecurringPayment.execute_payment returns a typed contract error (see its
+   * `Error` enum), which surfaces here as "Error(Contract, #N)" in the thrown
+   * message. Matching the numeric code is precise and independent of wording;
+   * the substring checks below are a fallback for host- and network-level
+   * failures, which are not typed contract errors.
+   */
   classifyError(error: unknown): SubmissionError {
     if (error instanceof Error) {
-      const message = error.message.toLowerCase();
+      const contractError = classifyContractError(error.message);
+      if (contractError) return contractError;
 
-      if (message.includes('not due yet')) {
-        return { code: 'NOT_DUE', message: error.message, retryable: false };
-      }
+      const message = error.message.toLowerCase();
 
       if (message.includes('timeout') || message.includes('network')) {
         return { code: 'NETWORK_ERROR', message: error.message, retryable: true };
@@ -123,4 +130,34 @@ export class PaymentExecutor {
       retryable: false,
     };
   }
+}
+
+/**
+ * RecurringPayment's error codes, as declared in
+ * contracts/recurring_payment/src/lib.rs. The scheduler only ever triggers
+ * execute_payment, so only ScheduleNotActive and PaymentNotDue are expected
+ * in practice; the others are included so an unexpected one is still
+ * recognisable instead of falling through to UNKNOWN_ERROR.
+ */
+const RECURRING_PAYMENT_ERRORS: Record<number, SubmissionError['code']> = {
+  1: 'ALREADY_INITIALIZED',
+  2: 'INVALID_AMOUNT',
+  3: 'INVALID_INTERVAL',
+  4: 'FIRST_PAYMENT_IN_PAST',
+  5: 'SCHEDULE_INACTIVE',
+  6: 'NOT_DUE',
+};
+
+/** Match "Error(Contract, #N)" in a thrown message and map it to a typed SubmissionError. */
+function classifyContractError(message: string): SubmissionError | null {
+  const match = message.match(/Error\(Contract, #(\d+)\)/);
+  if (!match) return null;
+
+  const code = RECURRING_PAYMENT_ERRORS[Number(match[1])];
+  if (!code) return null;
+
+  // Neither case is worth retrying: NOT_DUE means our local clock ran ahead of
+  // ledger time and the next poll will pick it up again; SCHEDULE_INACTIVE
+  // means the schedule was cancelled between being enqueued and executed.
+  return { code, message, retryable: false };
 }

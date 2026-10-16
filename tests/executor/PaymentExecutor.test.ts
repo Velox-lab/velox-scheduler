@@ -55,11 +55,11 @@ describe('PaymentExecutor', () => {
 
     it('propagates a simulation failure from prepareTransaction', async () => {
       const server = makeServer({
-        prepareTransaction: jest.fn().mockRejectedValue(new Error('payment is not due yet')),
+        prepareTransaction: jest.fn().mockRejectedValue(new Error('HostError: Error(Contract, #6)')),
       });
       await expect(
         makeExecutor(server).buildTransaction(makeSchedule(), operator)
-      ).rejects.toThrow('payment is not due yet');
+      ).rejects.toThrow('Error(Contract, #6)');
     });
   });
 
@@ -158,16 +158,28 @@ describe('PaymentExecutor', () => {
   describe('classifyError', () => {
     const executor = makeExecutor(makeServer());
 
-    it('treats a not-due contract panic as non-retryable NOT_DUE', () => {
+    it('treats RecurringPayment error #6 as non-retryable NOT_DUE', () => {
       expect(
-        executor.classifyError(new Error('HostError: "payment is not due yet"'))
+        executor.classifyError(new Error('HostError: Error(Contract, #6)'))
       ).toMatchObject({ code: 'NOT_DUE', retryable: false });
     });
 
-    it('treats an exhausted allowance as non-retryable', () => {
+    it('treats RecurringPayment error #5 as non-retryable SCHEDULE_INACTIVE', () => {
+      expect(
+        executor.classifyError(new Error('HostError: Error(Contract, #5)'))
+      ).toMatchObject({ code: 'SCHEDULE_INACTIVE', retryable: false });
+    });
+
+    it('falls through to substring matching for an unmapped contract error code', () => {
       expect(
         executor.classifyError(new Error('Error(Contract, #9): allowance is not enough'))
       ).toMatchObject({ code: 'INSUFFICIENT_FUNDS', retryable: false });
+    });
+
+    it('treats an unmapped contract error with no recognisable substring as unknown', () => {
+      expect(
+        executor.classifyError(new Error('Error(Contract, #9)'))
+      ).toMatchObject({ code: 'UNKNOWN_ERROR', retryable: false });
     });
 
     it('treats an unrecognised error as non-retryable', () => {

@@ -98,7 +98,19 @@ describe('SchedulerEngine', () => {
     it('releases a schedule the contract says is not due yet, without logging a failure', async () => {
       const { engine, poller, build, logger, metrics } = setup();
       poller.fetchDueSchedules.mockResolvedValue([makeSchedule('s1')]);
-      build.mockRejectedValue(new Error('payment is not due yet'));
+      build.mockRejectedValue(new Error('HostError: Error(Contract, #6)'));
+
+      await engine.runCycle();
+
+      expect(logger.getExecutionHistory('s1')).toEqual([]);
+      expect(metrics.getTotalFailureCount()).toBe(0);
+      expect(engine.isInFlight('s1')).toBe(false);
+    });
+
+    it('releases a schedule cancelled between enqueue and execution, without logging a failure', async () => {
+      const { engine, poller, build, logger, metrics } = setup();
+      poller.fetchDueSchedules.mockResolvedValue([makeSchedule('s1')]);
+      build.mockRejectedValue(new Error('HostError: Error(Contract, #5)'));
 
       await engine.runCycle();
 
