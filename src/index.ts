@@ -77,16 +77,16 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const engine = buildEngine(config);
 
-  process.on('SIGINT', () => {
-    console.log('Shutting down velox-scheduler...');
-    engine.stop();
+  const shutdown = async (signal: string): Promise<void> => {
+    console.log(`Received ${signal}, shutting down velox-scheduler...`);
+    // Waits for any payment currently mid-submission, so the process is
+    // never killed between sending a transaction and logging its result.
+    await engine.stop();
     process.exit(0);
-  });
+  };
 
-  process.on('SIGTERM', () => {
-    engine.stop();
-    process.exit(0);
-  });
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
   console.log(`velox-scheduler starting on ${config.stellarNetwork}...`);
   engine.start();

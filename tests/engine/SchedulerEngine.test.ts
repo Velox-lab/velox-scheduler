@@ -151,7 +151,7 @@ describe('SchedulerEngine', () => {
         'success',
       ]);
 
-      engine.stop();
+      await engine.stop();
     });
 
     it('logs a failure once max retries are exhausted', async () => {
@@ -172,7 +172,7 @@ describe('SchedulerEngine', () => {
       expect(metrics.getTotalRetryCount()).toBeGreaterThanOrEqual(3);
       expect(metrics.getTotalFailureCount()).toBeGreaterThanOrEqual(1);
 
-      engine.stop();
+      await engine.stop();
     });
 
     it('cancels pending retries on stop', async () => {
@@ -185,11 +185,72 @@ describe('SchedulerEngine', () => {
       await jest.advanceTimersByTimeAsync(0);
       expect(submit).toHaveBeenCalledTimes(1);
 
-      engine.stop();
+      await engine.stop();
       await jest.advanceTimersByTimeAsync(60_000);
 
       expect(submit).toHaveBeenCalledTimes(1);
       expect(engine.isInFlight('s1')).toBe(false);
+    });
+  });
+
+  describe('stop', () => {
+    it('waits for an execution already in flight to finish before resolving', async () => {
+      const { engine, poller, build, submit, logger } = setup();
+      poller.fetchDueSchedules.mockResolvedValue([makeSchedule('s1')]);
+
+      const events: string[] = [];
+      let resolveBuild!: () => void;
+      build.mockImplementation(
+        () =>
+          new Promise<StellarSdk.Transaction>((resolve) => {
+            resolveBuild = () => {
+              events.push('build-resolved');
+              resolve({} as StellarSdk.Transaction);
+            };
+          })
+      );
+      submit.mockImplementation(async () => {
+        events.push('submitted');
+        return { hash: 'tx_hash', successful: true };
+      });
+
+      const cyclePromise = engine.runCycle();
+      // Let the cycle run far enough to call buildTransaction and suspend on it
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(engine.isInFlight('s1')).toBe(true);
+
+      const stopPromise = engine.stop().then(() => events.push('stop-resolved'));
+
+      resolveBuild();
+      await cyclePromise;
+      await stopPromise;
+
+      expect(events).toEqual(['build-resolved', 'submitted', 'stop-resolved']);
+      expect(logger.getExecutionHistory('s1')[0].outcome).toBe('success');
+    });
+
+    it('resolves after its timeout even if an execution never finishes', async () => {
+      jest.useFakeTimers();
+      const { engine, poller, build } = setup();
+      poller.fetchDueSchedules.mockResolvedValue([makeSchedule('s1')]);
+      build.mockReturnValue(new Promise<StellarSdk.Transaction>(() => {})); // never settles
+
+      void engine.runCycle();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(engine.isInFlight('s1')).toBe(true);
+
+      let stopResolved = false;
+      const stopPromise = engine.stop(50).then(() => {
+        stopResolved = true;
+      });
+
+      await jest.advanceTimersByTimeAsync(49);
+      expect(stopResolved).toBe(false);
+
+      await jest.advanceTimersByTimeAsync(1);
+      await stopPromise;
+
+      expect(stopResolved).toBe(true);
     });
   });
 
@@ -206,7 +267,7 @@ describe('SchedulerEngine', () => {
       await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
       expect(poller.fetchDueSchedules).toHaveBeenCalledTimes(2);
 
-      engine.stop();
+      await engine.stop();
     });
 
     it('keeps polling after a cycle throws', async () => {
@@ -224,7 +285,7 @@ describe('SchedulerEngine', () => {
       await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
       expect(poller.fetchDueSchedules).toHaveBeenCalledTimes(2);
 
-      engine.stop();
+      await engine.stop();
     });
 
     it('stops polling after stop', async () => {
@@ -234,7 +295,7 @@ describe('SchedulerEngine', () => {
 
       engine.start();
       await jest.advanceTimersByTimeAsync(0);
-      engine.stop();
+      await engine.stop();
       await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
 
       expect(poller.fetchDueSchedules).toHaveBeenCalledTimes(1);
