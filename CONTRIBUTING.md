@@ -9,6 +9,7 @@ Pick an open issue labeled [`good first issue`](https://github.com/Velox-lab/vel
 ## Setup
 
 You need Node.js **22.12 or newer** (required by `@stellar/stellar-sdk` 17).
+If you use `nvm`, `nvm use` picks up the version in `.nvmrc`.
 
 ```bash
 git clone https://github.com/Velox-lab/velox-scheduler.git
@@ -60,4 +61,4 @@ Docs are held to the same standard as code. Before submitting a docs PR, check t
 
 ## Reporting security problems
 
-Do not describe a vulnerability in a public issue or pull request. Open an issue that only asks the maintainers for a private way to report it, with no details, and we will get in touch.
+See [SECURITY.md](SECURITY.md).
