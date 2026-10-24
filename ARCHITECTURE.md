@@ -313,7 +313,7 @@ Target coverage: **95%+**
 - No silent failures — every error is caught, logged, and handled
 - Errors are categorised: retryable vs. terminal
 - The scheduler never crashes on a single payment failure — it logs, retries or skips, and continues
-- Unhandled exceptions at the engine level are caught, logged as fatal, and trigger a graceful restart
+- An error thrown during a poll cycle (e.g. the RPC endpoint is unreachable) is caught by `SchedulerEngine`, logged via `ExecutionLogger.logCycleError`, and the polling loop continues at the next scheduled interval. There is no restart — one cycle's failure never stops later cycles from running.
 
 ---
 
