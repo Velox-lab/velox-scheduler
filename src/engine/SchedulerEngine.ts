@@ -45,6 +45,8 @@ export class SchedulerEngine {
   private retryTimers: Set<NodeJS.Timeout> = new Set();
   /** Schedules being executed or waiting on a retry. Never picked up twice. */
   private inFlight: Set<string> = new Set();
+  /** Promises of executions currently running a network call, so stop() can wait for them. */
+  private inFlightExecutions: Map<string, Promise<void>> = new Map();
 
   constructor(deps: SchedulerEngineDeps) {
     this.poller = deps.poller;
@@ -64,8 +66,16 @@ export class SchedulerEngine {
     this.scheduleNextCycle(0);
   }
 
-  /** Gracefully stop the scheduler daemon, cancel pending retries, and clear the queue. */
-  stop(): void {
+  /**
+   * Gracefully stop the scheduler daemon: stop polling, cancel pending
+   * retries that have not started yet, then wait for any execution already
+   * in flight (a transaction mid-build, -submit, or -poll) to finish, so the
+   * process is not killed in the middle of sending a payment.
+   *
+   * Resolves once nothing is in flight, or after `timeoutMs`, whichever
+   * comes first — an unresponsive RPC endpoint must not hang shutdown forever.
+   */
+  async stop(timeoutMs: number = 10_000): Promise<void> {
     this.running = false;
     if (this.timer) {
       clearTimeout(this.timer);
@@ -73,7 +83,17 @@ export class SchedulerEngine {
     }
     this.retryTimers.forEach((t) => clearTimeout(t));
     this.retryTimers.clear();
+
+    const pending = Array.from(this.inFlightExecutions.values());
+    if (pending.length > 0) {
+      await Promise.race([
+        Promise.allSettled(pending),
+        new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+      ]);
+    }
+
     this.inFlight.clear();
+    this.inFlightExecutions.clear();
     this.queue.clear();
   }
 
@@ -103,8 +123,22 @@ export class SchedulerEngine {
 
   // ── Private helpers ─────────────────────────────────────────────────────────
 
-  /** Execute a single scheduled payment with retry on failure. */
-  private async executeSchedule(schedule: Schedule): Promise<void> {
+  /** Run a single execution attempt, tracked so stop() can wait for it to finish. */
+  private executeSchedule(schedule: Schedule): Promise<void> {
+    const promise = this.runExecutionAttempt(schedule);
+    this.inFlightExecutions.set(schedule.scheduleId, promise);
+    const untrack = () => {
+      // Only clear the entry if a retry has not already registered a newer promise
+      if (this.inFlightExecutions.get(schedule.scheduleId) === promise) {
+        this.inFlightExecutions.delete(schedule.scheduleId);
+      }
+    };
+    promise.then(untrack, untrack);
+    return promise;
+  }
+
+  /** Build, sign, submit and log a single scheduled payment, retrying on failure. */
+  private async runExecutionAttempt(schedule: Schedule): Promise<void> {
     try {
       const tx = await this.executor.buildTransaction(schedule, this.operatorKeypair);
       const signed = this.executor.signTransaction(tx, this.operatorKeypair);
