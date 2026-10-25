@@ -47,7 +47,7 @@ The scheduler maintains a local queue of upcoming payments, sorted by execution 
 The main loop. Orchestrates the polling, filtering, execution, and logging cycle.
 
 - `start()` — boots the daemon and begins the main loop
-- `stop()` — gracefully shuts down the daemon
+- `stop()` — stops polling and cancels retries that have not started yet, then waits (up to a timeout, default 10s) for any payment already in flight to finish, so the process is never killed mid-submission
 - `runCycle()` — executes one full poll → filter → execute → log cycle
 
 ### `ChainPoller`
