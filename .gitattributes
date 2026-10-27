@@ -1,0 +1,10 @@
+# Normalize all text files to LF line endings in the repository, regardless
+# of which platform a contributor commits from. Preventative: the repo's own
+# history is already LF, checked via `git show main:<file>`.
+* text=auto eol=lf
+
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+
+package-lock.json text eol=lf -diff linguist-generated
