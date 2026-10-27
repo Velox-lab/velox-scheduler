@@ -24,7 +24,7 @@
   "license": "MIT",
   "dependencies": {
     "@stellar/stellar-sdk": "^17.2.1",
-    "dotenv": "^16.4.5",
+    "dotenv": "^18.0.9",
     "winston": "^3.13.0"
   },
   "devDependencies": {
