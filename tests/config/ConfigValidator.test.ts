@@ -63,6 +63,13 @@ describe('ConfigValidator', () => {
     );
   });
 
+  it('returns error when registryContractId is empty', () => {
+    const config = { ...validConfig(), registryContractId: '' };
+    const result = validator.validate(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('registryContractId is required');
+  });
+
   it('returns error when registryContractId does not start with C', () => {
     const config = { ...validConfig(), registryContractId: 'GXXXXXXX' };
     const result = validator.validate(config);
