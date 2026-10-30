@@ -22,6 +22,7 @@ export class ConfigValidator {
     this.validateContractId(config.registryContractId, errors);
     this.validatePositiveInteger('pollIntervalMs', config.pollIntervalMs, errors);
     this.validatePositiveInteger('maxRetryAttempts', config.maxRetryAttempts, errors);
+    this.validatePort('metricsPort', config.metricsPort, errors);
 
     return { valid: errors.length === 0, errors };
   }
@@ -70,6 +71,13 @@ export class ConfigValidator {
   private validatePositiveInteger(field: string, value: number, errors: string[]): void {
     if (!Number.isInteger(value) || value <= 0) {
       errors.push(`${field} must be a positive integer, got ${value}`);
+    }
+  }
+
+  /** Check that a field is a valid TCP port number (1-65535). */
+  private validatePort(field: string, value: number, errors: string[]): void {
+    if (!Number.isInteger(value) || value < 1 || value > 65_535) {
+      errors.push(`${field} must be a port number between 1 and 65535, got ${value}`);
     }
   }
 }

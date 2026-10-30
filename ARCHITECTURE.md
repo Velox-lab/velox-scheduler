@@ -288,6 +288,17 @@ All runtime configuration is injected via environment variables. No hardcoded va
 | `POLL_INTERVAL_MS` | Milliseconds between cycles | `10000` |
 | `MAX_RETRY_ATTEMPTS` | Max retries per schedule | `3` |
 | `LOG_LEVEL` | `debug`, `info`, `warn`, `error` | `info` |
+| `METRICS_PORT` | Port for the health and metrics HTTP server | `9090` |
+
+## Health and Metrics
+
+`MetricsServer` serves `SchedulerMetrics` over plain HTTP on `METRICS_PORT`:
+
+- `GET /health` — `200` if a polling cycle completed within the last 3 poll
+  intervals, `503` otherwise (including before the first cycle has run).
+  Body: `{ "healthy": boolean, "lastCycleTimestamp": number | null }`.
+- `GET /metrics` — the full metrics snapshot as JSON:
+  `{ "successCount", "failureCount", "retryCount", "cycleCount", "successRate", "lastCycleTimestamp" }`.
 
 ---
 

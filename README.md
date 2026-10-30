@@ -90,6 +90,13 @@ Manages retry logic for failed payment submissions with exponential backoff.
 - `incrementAttempt(scheduleId)` — tracks attempt count per schedule
 - `hasExceededMaxRetries(scheduleId)` — flags permanently failed jobs
 
+### `MetricsServer`
+Serves `SchedulerMetrics` over HTTP so an external monitor can check on the daemon.
+
+- `GET /health` — `200` if a cycle completed recently, `503` otherwise
+- `GET /metrics` — success, failure, retry and cycle counts, plus success rate, as JSON
+- `start(port)` / `stop()`
+
 ---
 
 ## Architecture
@@ -178,6 +185,7 @@ REGISTRY_CONTRACT_ID=C...
 POLL_INTERVAL_MS=10000
 MAX_RETRY_ATTEMPTS=3
 LOG_LEVEL=info
+METRICS_PORT=9090
 ```
 
 ### Run
