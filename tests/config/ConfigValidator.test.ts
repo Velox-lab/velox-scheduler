@@ -10,6 +10,7 @@ function validConfig(): SchedulerConfig {
     pollIntervalMs: 10000,
     maxRetryAttempts: 3,
     logLevel: 'info',
+    metricsPort: 9090,
   };
 }
 
@@ -91,6 +92,25 @@ describe('ConfigValidator', () => {
     const result = validator.validate(config);
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.includes('maxRetryAttempts'))).toBe(true);
+  });
+
+  it('returns error when metricsPort is zero', () => {
+    const config = { ...validConfig(), metricsPort: 0 };
+    const result = validator.validate(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes('metricsPort'))).toBe(true);
+  });
+
+  it('returns error when metricsPort is above 65535', () => {
+    const config = { ...validConfig(), metricsPort: 70_000 };
+    const result = validator.validate(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.includes('metricsPort'))).toBe(true);
+  });
+
+  it('accepts a valid metricsPort', () => {
+    const config = { ...validConfig(), metricsPort: 3000 };
+    expect(validator.validate(config).valid).toBe(true);
   });
 
   it('collects multiple errors at once', () => {

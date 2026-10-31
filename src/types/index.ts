@@ -53,4 +53,5 @@ export interface SchedulerConfig {
   pollIntervalMs: number;
   maxRetryAttempts: number;
   logLevel: string;
+  metricsPort: number;
 }

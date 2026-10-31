@@ -7,6 +7,7 @@ import { PaymentExecutor } from './executor/PaymentExecutor';
 import { RetryHandler } from './executor/RetryHandler';
 import { ExecutionLogger } from './logger/ExecutionLogger';
 import { SchedulerMetrics } from './metrics/SchedulerMetrics';
+import { MetricsServer } from './server/MetricsServer';
 import { ConfigValidator } from './config/ConfigValidator';
 import { SchedulerConfig } from './types';
 
@@ -34,6 +35,7 @@ function loadConfig(): SchedulerConfig {
     pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS ?? '10000', 10),
     maxRetryAttempts: parseInt(process.env.MAX_RETRY_ATTEMPTS ?? '3', 10),
     logLevel: process.env.LOG_LEVEL ?? 'info',
+    metricsPort: parseInt(process.env.METRICS_PORT ?? '9090', 10),
   };
 
   const { valid, errors } = new ConfigValidator().validate(config);
@@ -44,7 +46,7 @@ function loadConfig(): SchedulerConfig {
   return config;
 }
 
-function buildEngine(config: SchedulerConfig): SchedulerEngine {
+function buildEngine(config: SchedulerConfig): { engine: SchedulerEngine; metrics: SchedulerMetrics } {
   const networkPassphrase =
     config.stellarNetwork === 'mainnet'
       ? StellarSdk.Networks.PUBLIC
@@ -53,8 +55,9 @@ function buildEngine(config: SchedulerConfig): SchedulerEngine {
   const server = new StellarSdk.rpc.Server(config.sorobanRpcUrl);
   const operatorKeypair = StellarSdk.Keypair.fromSecret(config.operatorSecretKey);
   const logger = new ExecutionLogger(config.logLevel);
+  const metrics = new SchedulerMetrics();
 
-  return new SchedulerEngine({
+  const engine = new SchedulerEngine({
     poller: new ChainPoller(
       server,
       config.registryContractId,
@@ -67,21 +70,25 @@ function buildEngine(config: SchedulerConfig): SchedulerEngine {
     executor: new PaymentExecutor(server, networkPassphrase),
     retryHandler: new RetryHandler(config.maxRetryAttempts),
     logger,
-    metrics: new SchedulerMetrics(),
+    metrics,
     operatorKeypair,
     pollIntervalMs: config.pollIntervalMs,
   });
+
+  return { engine, metrics };
 }
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const engine = buildEngine(config);
+  const { engine, metrics } = buildEngine(config);
+  const metricsServer = new MetricsServer(metrics, config.pollIntervalMs);
 
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`Received ${signal}, shutting down velox-scheduler...`);
     // Waits for any payment currently mid-submission, so the process is
     // never killed between sending a transaction and logging its result.
     await engine.stop();
+    await metricsServer.stop();
     process.exit(0);
   };
 
@@ -89,6 +96,8 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
   console.log(`velox-scheduler starting on ${config.stellarNetwork}...`);
+  metricsServer.start(config.metricsPort);
+  console.log(`Health and metrics available on port ${config.metricsPort}`);
   engine.start();
 }
 
