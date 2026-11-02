@@ -100,6 +100,15 @@ export class ExecutionLogger {
     });
   }
 
+  /** Log that ledger time could not be fetched and the local clock was used instead. */
+  logLedgerTimeFallback(error: Error, fallbackTimestamp: number): void {
+    this.logger.warn({
+      event: 'ledger_time_fallback',
+      error: error.message,
+      fallbackTimestamp,
+    });
+  }
+
   /** Return the full execution history for a given schedule. */
   getExecutionHistory(scheduleId: string): ExecutionRecord[] {
     return this.history.get(scheduleId) ?? [];

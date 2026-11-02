@@ -145,4 +145,42 @@ describe('ChainPoller', () => {
       );
     });
   });
+
+  describe('getLedgerTime', () => {
+    it('returns the latest ledger close time as a number', async () => {
+      const getLatestLedger = jest.fn().mockResolvedValue({
+        id: 'abc',
+        sequence: 123,
+        protocolVersion: '21',
+        closeTime: '1700000000',
+      });
+      const server = { getLatestLedger } as unknown as SimulationServer;
+      const poller = new ChainPoller(server, REGISTRY_ID, StellarSdk.Networks.TESTNET, SENDER);
+
+      expect(await poller.getLedgerTime()).toBe(1700000000);
+    });
+
+    it('throws if closeTime is not numeric', async () => {
+      const getLatestLedger = jest.fn().mockResolvedValue({
+        id: 'abc',
+        sequence: 123,
+        protocolVersion: '21',
+        closeTime: 'not-a-number',
+      });
+      const server = { getLatestLedger } as unknown as SimulationServer;
+      const poller = new ChainPoller(server, REGISTRY_ID, StellarSdk.Networks.TESTNET, SENDER);
+
+      await expect(poller.getLedgerTime()).rejects.toThrow(
+        'getLatestLedger returned a non-numeric closeTime'
+      );
+    });
+
+    it('propagates the error if the RPC call itself fails', async () => {
+      const getLatestLedger = jest.fn().mockRejectedValue(new Error('RPC unreachable'));
+      const server = { getLatestLedger } as unknown as SimulationServer;
+      const poller = new ChainPoller(server, REGISTRY_ID, StellarSdk.Networks.TESTNET, SENDER);
+
+      await expect(poller.getLedgerTime()).rejects.toThrow('RPC unreachable');
+    });
+  });
 });

@@ -104,7 +104,7 @@ export class SchedulerEngine {
 
   /** Execute one full poll → enqueue → dequeue → execute cycle. */
   async runCycle(): Promise<void> {
-    const now = Math.floor(Date.now() / 1000);
+    const now = await this.getCurrentTime();
 
     const dueSchedules = await this.poller.fetchDueSchedules(now);
     dueSchedules
@@ -122,6 +122,23 @@ export class SchedulerEngine {
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────────
+
+  /**
+   * Resolve "now" for due-schedule selection from the chain's own ledger close
+   * time rather than this process's local clock, which can drift from it in
+   * either direction. Falls back to the local clock (logged) if the ledger
+   * time cannot be fetched, so a single bad RPC call never stalls a cycle.
+   */
+  private async getCurrentTime(): Promise<number> {
+    try {
+      return await this.poller.getLedgerTime();
+    } catch (err) {
+      const fallback = Math.floor(Date.now() / 1000);
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.logger.logLedgerTimeFallback(error, fallback);
+      return fallback;
+    }
+  }
 
   /** Run a single execution attempt, tracked so stop() can wait for it to finish. */
   private executeSchedule(schedule: Schedule): Promise<void> {

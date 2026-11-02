@@ -24,7 +24,10 @@ function makeSchedule(id: string): Schedule {
 
 /** Build an engine with real queue/retry/metrics/logger and mocked chain access. */
 function setup() {
-  const poller = { fetchDueSchedules: jest.fn() } as unknown as jest.Mocked<ChainPoller>;
+  const poller = {
+    fetchDueSchedules: jest.fn(),
+    getLedgerTime: jest.fn().mockResolvedValue(Math.floor(Date.now() / 1000)),
+  } as unknown as jest.Mocked<ChainPoller>;
   const executor = new PaymentExecutor({} as SubmissionServer, StellarSdk.Networks.TESTNET);
   const fakeTx = {} as StellarSdk.Transaction;
   const build = jest.spyOn(executor, 'buildTransaction').mockResolvedValue(fakeTx);
@@ -117,6 +120,49 @@ describe('SchedulerEngine', () => {
       expect(logger.getExecutionHistory('s1')).toEqual([]);
       expect(metrics.getTotalFailureCount()).toBe(0);
       expect(engine.isInFlight('s1')).toBe(false);
+    });
+  });
+
+  describe('ledger time', () => {
+    it('selects due schedules using ledger time even when the local clock runs behind it', async () => {
+      const { engine, poller } = setup();
+      const localNow = Math.floor(Date.now() / 1000);
+      // Local clock is 1 hour behind ledger time: a schedule due per ledger
+      // time, but not yet due per the local clock, must still be selected.
+      poller.getLedgerTime.mockResolvedValue(localNow + 3600);
+      poller.fetchDueSchedules.mockResolvedValue([]);
+
+      await engine.runCycle();
+
+      expect(poller.fetchDueSchedules).toHaveBeenCalledWith(localNow + 3600);
+    });
+
+    it('selects due schedules using ledger time even when the local clock runs ahead of it', async () => {
+      const { engine, poller } = setup();
+      const localNow = Math.floor(Date.now() / 1000);
+      // Local clock is 1 hour ahead of ledger time: a schedule the local clock
+      // thinks is due must not be treated as due until the ledger agrees.
+      poller.getLedgerTime.mockResolvedValue(localNow - 3600);
+      poller.fetchDueSchedules.mockResolvedValue([]);
+
+      await engine.runCycle();
+
+      expect(poller.fetchDueSchedules).toHaveBeenCalledWith(localNow - 3600);
+    });
+
+    it('falls back to the local clock and logs when ledger time cannot be fetched', async () => {
+      const { engine, poller, logger } = setup();
+      const logSpy = jest.spyOn(logger, 'logLedgerTimeFallback');
+      poller.getLedgerTime.mockRejectedValue(new Error('RPC unreachable'));
+      poller.fetchDueSchedules.mockResolvedValue([]);
+
+      await engine.runCycle();
+
+      expect(poller.fetchDueSchedules).toHaveBeenCalledTimes(1);
+      const usedNow = poller.fetchDueSchedules.mock.calls[0][0];
+      expect(typeof usedNow).toBe('number');
+      expect(logSpy).toHaveBeenCalledTimes(1);
+      expect(logSpy.mock.calls[0][0].message).toBe('RPC unreachable');
     });
   });
 
