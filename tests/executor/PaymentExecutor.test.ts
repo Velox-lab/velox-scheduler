@@ -12,6 +12,7 @@ function makeSchedule(): Schedule {
     sender: 'G_SENDER',
     recipient: 'G_RECIPIENT',
     token: 'C_TOKEN',
+    amount: 100n,
     nextPaymentTime: 1000,
     status: 'active',
   };

@@ -9,11 +9,17 @@ export class SchedulerMetrics {
   private failureCount: number = 0;
   private retryCount: number = 0;
   private cycleCount: number = 0;
+  private skippedUnderfundedCount: number = 0;
   private lastCycleTimestamp: number | null = null;
 
   /** Record a successful payment execution. */
   recordSuccess(): void {
     this.successCount += 1;
+  }
+
+  /** Record a schedule skipped for insufficient allowance or balance. */
+  recordSkippedUnderfunded(): void {
+    this.skippedUnderfundedCount += 1;
   }
 
   /** Record a failed payment execution. */
@@ -52,6 +58,11 @@ export class SchedulerMetrics {
     return this.cycleCount;
   }
 
+  /** Return the total number of schedules skipped for insufficient funding. */
+  getTotalSkippedUnderfundedCount(): number {
+    return this.skippedUnderfundedCount;
+  }
+
   /** Return the timestamp of the last completed cycle. Null if no cycle has run. */
   getLastCycleTimestamp(): number | null {
     return this.lastCycleTimestamp;
@@ -70,6 +81,7 @@ export class SchedulerMetrics {
     this.failureCount = 0;
     this.retryCount = 0;
     this.cycleCount = 0;
+    this.skippedUnderfundedCount = 0;
     this.lastCycleTimestamp = null;
   }
 }
