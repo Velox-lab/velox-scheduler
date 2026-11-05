@@ -2,7 +2,7 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { Schedule, ScheduleStatus } from '../types';
 
 /** The subset of the Soroban RPC server the poller needs. Injected so tests can mock it. */
-export type SimulationServer = Pick<StellarSdk.rpc.Server, 'simulateTransaction'>;
+export type SimulationServer = Pick<StellarSdk.rpc.Server, 'simulateTransaction' | 'getLatestLedger'>;
 
 /** Called when a single schedule cannot be read. The rest of the snapshot is still returned. */
 export type ReadErrorHandler = (scheduleId: string, error: Error) => void;
@@ -109,6 +109,21 @@ export class ChainPoller {
   async fetchScheduleStatus(scheduleId: string): Promise<ScheduleStatus> {
     const status = await this.readContract<string[] | string>(scheduleId, 'get_schedule_status');
     return parseStatus(status);
+  }
+
+  /**
+   * Fetch the network's current ledger close time (Unix seconds).
+   * This is the time the chain itself considers "now", which can drift from
+   * this process's local clock. Callers should use it instead of Date.now()
+   * when deciding whether a schedule is due.
+   */
+  async getLedgerTime(): Promise<number> {
+    const { closeTime } = await this.server.getLatestLedger();
+    const seconds = Number(closeTime);
+    if (!Number.isFinite(seconds)) {
+      throw new Error(`getLatestLedger returned a non-numeric closeTime: ${closeTime}`);
+    }
+    return seconds;
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────────

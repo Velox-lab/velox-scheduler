@@ -103,8 +103,11 @@ The engine does not know how polling works, how transactions are built, or how r
 - `fetchSchedule(scheduleId: string): Promise<Schedule>`
 - `fetchScheduleStatus(scheduleId: string): Promise<ScheduleStatus>`
 - `fetchRegistrySnapshot(): Promise<Schedule[]>`
+- `getLedgerTime(): Promise<number>`
 
 It returns plain data objects. It has no knowledge of queues, executors, or loggers.
+
+`getLedgerTime()` fetches the network's latest ledger close time via `getLatestLedger`. The engine uses this, not `Date.now()`, as "now" when asking `fetchDueSchedules` which schedules are due — the local clock on the host running the daemon can drift from ledger close time in either direction, and `execute_payment` enforces `now >= next_payment_time` using ledger time, not wall-clock time. If `getLedgerTime()` fails, the engine logs it (`ledger_time_fallback`) and falls back to the local clock for that cycle only, so one bad RPC call never stalls polling.
 
 **Interface contract:**
 
@@ -114,6 +117,7 @@ interface IChainPoller {
   fetchSchedule(scheduleId: string): Promise<Schedule>
   fetchScheduleStatus(scheduleId: string): Promise<ScheduleStatus>
   fetchRegistrySnapshot(): Promise<Schedule[]>
+  getLedgerTime(): Promise<number>
 }
 ```
 
