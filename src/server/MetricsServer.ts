@@ -75,6 +75,7 @@ export class MetricsServer {
       failureCount: this.metrics.getTotalFailureCount(),
       retryCount: this.metrics.getTotalRetryCount(),
       cycleCount: this.metrics.getTotalCycleCount(),
+      skippedUnderfundedCount: this.metrics.getTotalSkippedUnderfundedCount(),
       successRate: this.metrics.getSuccessRate(),
       lastCycleTimestamp: this.metrics.getLastCycleTimestamp(),
     });

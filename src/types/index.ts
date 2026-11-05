@@ -10,8 +10,17 @@ export interface Schedule {
   sender: string;
   recipient: string;
   token: string;
+  /** Amount pulled per payment. Only meaningful for 'recurring' schedules. */
+  amount: bigint;
   nextPaymentTime: number; // Unix timestamp in seconds
   status: ScheduleStatus;
+}
+
+/** Result of checking whether a schedule's sender can currently cover its payment. */
+export interface FundingCheck {
+  sufficient: boolean;
+  allowance: bigint;
+  balance: bigint;
 }
 
 export interface ExecutionResult {

@@ -13,6 +13,7 @@ describe('SchedulerMetrics', () => {
       expect(metrics.getTotalFailureCount()).toBe(0);
       expect(metrics.getTotalRetryCount()).toBe(0);
       expect(metrics.getTotalCycleCount()).toBe(0);
+      expect(metrics.getTotalSkippedUnderfundedCount()).toBe(0);
     });
 
     it('starts with null lastCycleTimestamp', () => {
@@ -62,6 +63,14 @@ describe('SchedulerMetrics', () => {
     });
   });
 
+  describe('recordSkippedUnderfunded', () => {
+    it('increments the skipped-underfunded count', () => {
+      metrics.recordSkippedUnderfunded();
+      metrics.recordSkippedUnderfunded();
+      expect(metrics.getTotalSkippedUnderfundedCount()).toBe(2);
+    });
+  });
+
   describe('getSuccessRate', () => {
     it('returns 1 when all executions succeeded', () => {
       metrics.recordSuccess();
@@ -92,12 +101,14 @@ describe('SchedulerMetrics', () => {
       metrics.recordFailure();
       metrics.recordRetry();
       metrics.recordCycle(1000);
+      metrics.recordSkippedUnderfunded();
       metrics.reset();
 
       expect(metrics.getTotalSuccessCount()).toBe(0);
       expect(metrics.getTotalFailureCount()).toBe(0);
       expect(metrics.getTotalRetryCount()).toBe(0);
       expect(metrics.getTotalCycleCount()).toBe(0);
+      expect(metrics.getTotalSkippedUnderfundedCount()).toBe(0);
       expect(metrics.getLastCycleTimestamp()).toBeNull();
     });
   });
