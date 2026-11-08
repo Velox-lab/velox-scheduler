@@ -27,20 +27,45 @@ describe('RetryHandler', () => {
   });
 
   describe('getNextRetryDelayMs', () => {
-    it('returns 2000ms for attempt 0', () => {
-      expect(handler.getNextRetryDelayMs(0)).toBe(2000);
+    it('returns half the capped exponential delay when random returns 0', () => {
+      const deterministic = new RetryHandler(3, () => 0);
+      expect(deterministic.getNextRetryDelayMs(0)).toBe(1000); // half of 2000
+      expect(deterministic.getNextRetryDelayMs(1)).toBe(2000); // half of 4000
+      expect(deterministic.getNextRetryDelayMs(2)).toBe(4000); // half of 8000
     });
 
-    it('returns 4000ms for attempt 1', () => {
-      expect(handler.getNextRetryDelayMs(1)).toBe(4000);
+    it('returns the full capped exponential delay when random returns 1', () => {
+      const deterministic = new RetryHandler(3, () => 1);
+      expect(deterministic.getNextRetryDelayMs(0)).toBe(2000);
+      expect(deterministic.getNextRetryDelayMs(1)).toBe(4000);
+      expect(deterministic.getNextRetryDelayMs(2)).toBe(8000);
     });
 
-    it('returns 8000ms for attempt 2', () => {
-      expect(handler.getNextRetryDelayMs(2)).toBe(8000);
+    it('never exceeds the 60000ms cap, even at high attempt numbers with maximal jitter', () => {
+      const deterministic = new RetryHandler(3, () => 1);
+      expect(deterministic.getNextRetryDelayMs(10)).toBe(60000);
+      expect(deterministic.getNextRetryDelayMs(20)).toBe(60000);
     });
 
-    it('caps delay at 60000ms', () => {
-      expect(handler.getNextRetryDelayMs(10)).toBe(60000);
+    it('never returns less than half the capped delay, even with minimal jitter', () => {
+      const deterministic = new RetryHandler(3, () => 0);
+      expect(deterministic.getNextRetryDelayMs(10)).toBe(30000); // half of the 60000 cap
+    });
+
+    it('varies the delay between calls for the same attempt number', () => {
+      const random = jest.fn().mockReturnValueOnce(0).mockReturnValueOnce(1);
+      const deterministic = new RetryHandler(3, random);
+
+      const first = deterministic.getNextRetryDelayMs(2);
+      const second = deterministic.getNextRetryDelayMs(2);
+
+      expect(first).not.toBe(second);
+    });
+
+    it('defaults to Math.random when no random source is injected', () => {
+      const delay = handler.getNextRetryDelayMs(0);
+      expect(delay).toBeGreaterThanOrEqual(1000);
+      expect(delay).toBeLessThanOrEqual(2000);
     });
   });
 

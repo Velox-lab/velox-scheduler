@@ -190,13 +190,15 @@ handleSubmissionResult()
 
 **Responsibility:** Decide whether and when to retry a failed transaction submission.
 
-`RetryHandler` encapsulates all retry logic. It uses exponential backoff with a configurable maximum attempt count.
+`RetryHandler` encapsulates all retry logic. It uses exponential backoff, capped at 60s, with a configurable maximum attempt count.
 
 - `shouldRetry(error: SubmissionError): boolean`
-- `getNextRetryTime(attemptNumber: number): number`
+- `getNextRetryDelayMs(attemptNumber: number): number`
 - `incrementAttempt(scheduleId: string): void`
 - `hasExceededMaxRetries(scheduleId: string): boolean`
 - `resetAttempts(scheduleId: string): void`
+
+`getNextRetryDelayMs` applies "equal jitter" to the capped exponential delay: half the capped delay, plus a random amount up to the other half. Without jitter, every payment that failed in the same cycle (e.g. during an RPC outage) would retry at the exact same moment; equal jitter spreads them out while still guaranteeing at least half the backoff has elapsed. The random source is injected via the constructor (`new RetryHandler(maxAttempts, random)`, defaulting to `Math.random`), so tests can use a deterministic sequence.
 
 **Retry decision logic:**
 
