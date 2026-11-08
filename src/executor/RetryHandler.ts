@@ -12,9 +12,15 @@ const MAX_DELAY_MS = 60_000;
 export class RetryHandler {
   private attempts: Map<string, number> = new Map();
   private readonly maxAttempts: number;
+  private readonly random: () => number;
 
-  constructor(maxAttempts: number = 3) {
+  /**
+   * @param random Source of randomness for jitter, injectable so tests can use
+   * a deterministic sequence instead of Math.random.
+   */
+  constructor(maxAttempts: number = 3, random: () => number = Math.random) {
     this.maxAttempts = maxAttempts;
+    this.random = random;
   }
 
   /** Return true if the given error type is worth retrying. */
@@ -22,10 +28,19 @@ export class RetryHandler {
     return error.retryable;
   }
 
-  /** Return the delay in ms before the next retry attempt. */
+  /**
+   * Return the delay in ms before the next retry attempt: exponential backoff
+   * (capped at MAX_DELAY_MS) with "equal jitter" — half the capped delay, plus
+   * a random amount up to the other half. Without jitter, many payments that
+   * fail together (e.g. an RPC outage) would all retry at the exact same
+   * moment; equal jitter spreads them out while still guaranteeing at least
+   * half the backoff has elapsed, unlike full jitter which can retry
+   * immediately.
+   */
   getNextRetryDelayMs(attemptNumber: number): number {
-    const delay = BASE_DELAY_MS * Math.pow(2, attemptNumber);
-    return Math.min(delay, MAX_DELAY_MS);
+    const cappedDelay = Math.min(BASE_DELAY_MS * Math.pow(2, attemptNumber), MAX_DELAY_MS);
+    const half = cappedDelay / 2;
+    return Math.floor(half + this.random() * half);
   }
 
   /** Increment the attempt counter for a given schedule. */
