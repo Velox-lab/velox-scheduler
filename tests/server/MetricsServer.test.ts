@@ -69,6 +69,7 @@ describe('MetricsServer', () => {
       metrics.recordSuccess();
       metrics.recordFailure();
       metrics.recordRetry();
+      metrics.recordSkippedUnderfunded();
       metrics.recordCycle(1_700_000_000);
       ({ server, baseUrl } = startServer(metrics));
 
@@ -81,6 +82,7 @@ describe('MetricsServer', () => {
         failureCount: 1,
         retryCount: 1,
         cycleCount: 1,
+        skippedUnderfundedCount: 1,
         successRate: 2 / 3,
         lastCycleTimestamp: 1_700_000_000,
       });
@@ -98,6 +100,7 @@ describe('MetricsServer', () => {
         failureCount: 0,
         retryCount: 0,
         cycleCount: 0,
+        skippedUnderfundedCount: 0,
         successRate: 0,
         lastCycleTimestamp: null,
       });

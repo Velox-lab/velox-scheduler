@@ -74,6 +74,7 @@ describe('ChainPoller', () => {
           sender: SENDER,
           recipient: RECIPIENT,
           token: TOKEN_ID,
+          amount: 100n,
           nextPaymentTime: 1_604_800,
           status: 'active',
         },
@@ -181,6 +182,63 @@ describe('ChainPoller', () => {
       const poller = new ChainPoller(server, REGISTRY_ID, StellarSdk.Networks.TESTNET, SENDER);
 
       await expect(poller.getLedgerTime()).rejects.toThrow('RPC unreachable');
+    });
+  });
+
+  describe('checkFunding', () => {
+    const SCHEDULE: import('../../src/types').Schedule = {
+      scheduleId: SCHEDULE_A,
+      scheduleType: 'recurring',
+      sender: SENDER,
+      recipient: RECIPIENT,
+      token: TOKEN_ID,
+      amount: 100n,
+      nextPaymentTime: 1_604_800,
+      status: 'active',
+    };
+
+    it('reports sufficient when both allowance and balance cover the amount', async () => {
+      const { poller } = makePoller([
+        { result: { retval: StellarSdk.nativeToScVal(200n, { type: 'i128' }) } }, // allowance
+        { result: { retval: StellarSdk.nativeToScVal(200n, { type: 'i128' }) } }, // balance
+      ]);
+
+      const result = await poller.checkFunding(SCHEDULE);
+
+      expect(result).toEqual({ sufficient: true, allowance: 200n, balance: 200n });
+    });
+
+    it('reports insufficient when allowance is below the amount', async () => {
+      const { poller } = makePoller([
+        { result: { retval: StellarSdk.nativeToScVal(50n, { type: 'i128' }) } }, // allowance
+        { result: { retval: StellarSdk.nativeToScVal(200n, { type: 'i128' }) } }, // balance
+      ]);
+
+      const result = await poller.checkFunding(SCHEDULE);
+
+      expect(result).toEqual({ sufficient: false, allowance: 50n, balance: 200n });
+    });
+
+    it('reports insufficient when balance is below the amount', async () => {
+      const { poller } = makePoller([
+        { result: { retval: StellarSdk.nativeToScVal(200n, { type: 'i128' }) } }, // allowance
+        { result: { retval: StellarSdk.nativeToScVal(10n, { type: 'i128' }) } }, // balance
+      ]);
+
+      const result = await poller.checkFunding(SCHEDULE);
+
+      expect(result).toEqual({ sufficient: false, allowance: 200n, balance: 10n });
+    });
+
+    it('reports sufficient when allowance and balance exactly equal the amount', async () => {
+      const { poller } = makePoller([
+        { result: { retval: StellarSdk.nativeToScVal(100n, { type: 'i128' }) } }, // allowance
+        { result: { retval: StellarSdk.nativeToScVal(100n, { type: 'i128' }) } }, // balance
+      ]);
+
+      const result = await poller.checkFunding(SCHEDULE);
+
+      expect(result.sufficient).toBe(true);
     });
   });
 });

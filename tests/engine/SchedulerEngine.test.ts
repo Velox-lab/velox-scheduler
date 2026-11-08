@@ -17,6 +17,7 @@ function makeSchedule(id: string): Schedule {
     sender: 'G_SENDER',
     recipient: 'G_RECIPIENT',
     token: 'C_TOKEN',
+    amount: 100n,
     nextPaymentTime: 0,
     status: 'active',
   };
@@ -27,6 +28,7 @@ function setup() {
   const poller = {
     fetchDueSchedules: jest.fn(),
     getLedgerTime: jest.fn().mockResolvedValue(Math.floor(Date.now() / 1000)),
+    checkFunding: jest.fn().mockResolvedValue({ sufficient: true, allowance: 1000n, balance: 1000n }),
   } as unknown as jest.Mocked<ChainPoller>;
   const executor = new PaymentExecutor({} as SubmissionServer, StellarSdk.Networks.TESTNET);
   const fakeTx = {} as StellarSdk.Transaction;
@@ -163,6 +165,59 @@ describe('SchedulerEngine', () => {
       expect(typeof usedNow).toBe('number');
       expect(logSpy).toHaveBeenCalledTimes(1);
       expect(logSpy.mock.calls[0][0].message).toBe('RPC unreachable');
+    });
+  });
+
+  describe('funding check', () => {
+    it('executes a schedule whose sender has sufficient allowance and balance', async () => {
+      const { engine, poller, submit } = setup();
+      poller.fetchDueSchedules.mockResolvedValue([makeSchedule('s1')]);
+      poller.checkFunding.mockResolvedValue({ sufficient: true, allowance: 1000n, balance: 1000n });
+
+      await engine.runCycle();
+
+      expect(submit).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips a schedule with insufficient allowance, logging and counting it, without executing', async () => {
+      const { engine, poller, submit, logger, metrics } = setup();
+      const schedule = makeSchedule('s1');
+      poller.fetchDueSchedules.mockResolvedValue([schedule]);
+      poller.checkFunding.mockResolvedValue({ sufficient: false, allowance: 50n, balance: 1000n });
+      const logSpy = jest.spyOn(logger, 'logUnderfunded');
+
+      await engine.runCycle();
+
+      expect(submit).not.toHaveBeenCalled();
+      expect(metrics.getTotalSkippedUnderfundedCount()).toBe(1);
+      expect(logSpy).toHaveBeenCalledWith('s1', schedule.amount, 50n, 1000n, expect.any(Number));
+      expect(engine.isInFlight('s1')).toBe(false);
+    });
+
+    it('skips a schedule with insufficient balance, logging and counting it, without executing', async () => {
+      const { engine, poller, submit, metrics } = setup();
+      poller.fetchDueSchedules.mockResolvedValue([makeSchedule('s1')]);
+      poller.checkFunding.mockResolvedValue({ sufficient: false, allowance: 1000n, balance: 10n });
+
+      await engine.runCycle();
+
+      expect(submit).not.toHaveBeenCalled();
+      expect(metrics.getTotalSkippedUnderfundedCount()).toBe(1);
+    });
+
+    it('checks funding for every due schedule independently', async () => {
+      const { engine, poller, submit, metrics } = setup();
+      poller.fetchDueSchedules.mockResolvedValue([makeSchedule('funded'), makeSchedule('broke')]);
+      poller.checkFunding.mockImplementation(async (schedule) =>
+        schedule.scheduleId === 'funded'
+          ? { sufficient: true, allowance: 1000n, balance: 1000n }
+          : { sufficient: false, allowance: 0n, balance: 0n }
+      );
+
+      await engine.runCycle();
+
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(metrics.getTotalSkippedUnderfundedCount()).toBe(1);
     });
   });
 

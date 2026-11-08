@@ -1,5 +1,5 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
-import { Schedule, ScheduleStatus } from '../types';
+import { FundingCheck, Schedule, ScheduleStatus } from '../types';
 
 /** The subset of the Soroban RPC server the poller needs. Injected so tests can mock it. */
 export type SimulationServer = Pick<StellarSdk.rpc.Server, 'simulateTransaction' | 'getLatestLedger'>;
@@ -100,8 +100,31 @@ export class ChainPoller {
       sender: info.sender,
       recipient: info.recipient,
       token: info.token,
+      amount: info.amount,
       nextPaymentTime: Number(info.next_payment_time),
       status: parseStatus(info.status),
+    };
+  }
+
+  /**
+   * Check whether a recurring schedule's sender currently has enough token
+   * allowance and balance to cover its next payment. Lets the engine skip an
+   * underfunded schedule instead of wasting a build+simulate+submit cycle on
+   * a transaction the token contract will reject anyway.
+   */
+  async checkFunding(schedule: Schedule): Promise<FundingCheck> {
+    const senderScVal = new StellarSdk.Address(schedule.sender).toScVal();
+    const spenderScVal = new StellarSdk.Address(schedule.scheduleId).toScVal();
+
+    const [allowance, balance] = await Promise.all([
+      this.readContract<bigint>(schedule.token, 'allowance', [senderScVal, spenderScVal]),
+      this.readContract<bigint>(schedule.token, 'balance', [senderScVal]),
+    ]);
+
+    return {
+      allowance,
+      balance,
+      sufficient: allowance >= schedule.amount && balance >= schedule.amount,
     };
   }
 
@@ -129,14 +152,18 @@ export class ChainPoller {
   // ── Private helpers ─────────────────────────────────────────────────────────
 
   /** Simulate a read-only, no-argument contract call and decode its return value. */
-  private async readContract<T>(contractId: string, method: string): Promise<T> {
+  private async readContract<T>(
+    contractId: string,
+    method: string,
+    args: StellarSdk.xdr.ScVal[] = []
+  ): Promise<T> {
     // Simulation does not check the sequence number, so no account lookup is needed
     const source = new StellarSdk.Account(this.sourcePublicKey, '0');
     const tx = new StellarSdk.TransactionBuilder(source, {
       fee: StellarSdk.BASE_FEE,
       networkPassphrase: this.networkPassphrase,
     })
-      .addOperation(new StellarSdk.Contract(contractId).call(method))
+      .addOperation(new StellarSdk.Contract(contractId).call(method, ...args))
       .setTimeout(30)
       .build();
 

@@ -109,6 +109,24 @@ export class ExecutionLogger {
     });
   }
 
+  /** Log a schedule skipped because the sender's allowance or balance can't cover it. */
+  logUnderfunded(
+    scheduleId: string,
+    required: bigint,
+    allowance: bigint,
+    balance: bigint,
+    timestamp: number
+  ): void {
+    this.logger.warn({
+      event: 'schedule_underfunded',
+      scheduleId,
+      required: required.toString(),
+      allowance: allowance.toString(),
+      balance: balance.toString(),
+      timestamp,
+    });
+  }
+
   /** Return the full execution history for a given schedule. */
   getExecutionHistory(scheduleId: string): ExecutionRecord[] {
     return this.history.get(scheduleId) ?? [];

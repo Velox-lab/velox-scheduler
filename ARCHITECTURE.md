@@ -78,18 +78,23 @@ velox-scheduler/src/
 ```
 SchedulerEngine.run_cycle():
   1. ChainPoller.fetch_due_schedules(now)        → Schedule[]
-  2. ExecutionQueue.enqueue(schedules)
-  3. ExecutionQueue.dequeue_due(now)             → Schedule[]
-  4. For each schedule:
+  2. For each 'recurring' due schedule not already in flight:
+       ChainPoller.check_funding(schedule)           → { sufficient, allowance, balance }
+       If not sufficient: skip it, log + count it, never enqueue it
+  3. ExecutionQueue.enqueue(sufficiently funded schedules)
+  4. ExecutionQueue.dequeue_due(now)             → Schedule[]
+  5. For each schedule:
        PaymentExecutor.build_transaction(schedule)   → Transaction
        PaymentExecutor.sign_transaction(tx, keypair) → SignedTx
        PaymentExecutor.submit_transaction(signedTx)  → Result
        ExecutionLogger.log_success | log_failure(result)
-  5. Sleep(POLL_INTERVAL_MS)
-  6. Repeat
+  6. Sleep(POLL_INTERVAL_MS)
+  7. Repeat
 ```
 
 The engine does not know how polling works, how transactions are built, or how retries are handled. It only knows the sequence.
+
+The funding check only applies to `'recurring'` schedules, which pull each payment through a token allowance — `'stream'` schedules are pre-funded escrow and always pass. Skipping an underfunded schedule before it reaches the queue avoids wasting a build+simulate+submit cycle, and the token contract's rejection, on a transaction that was never going to succeed; it's logged as `schedule_underfunded` and counted in `SchedulerMetrics.getTotalSkippedUnderfundedCount()`.
 
 ---
 
@@ -104,10 +109,13 @@ The engine does not know how polling works, how transactions are built, or how r
 - `fetchScheduleStatus(scheduleId: string): Promise<ScheduleStatus>`
 - `fetchRegistrySnapshot(): Promise<Schedule[]>`
 - `getLedgerTime(): Promise<number>`
+- `checkFunding(schedule: Schedule): Promise<FundingCheck>`
 
 It returns plain data objects. It has no knowledge of queues, executors, or loggers.
 
 `getLedgerTime()` fetches the network's latest ledger close time via `getLatestLedger`. The engine uses this, not `Date.now()`, as "now" when asking `fetchDueSchedules` which schedules are due — the local clock on the host running the daemon can drift from ledger close time in either direction, and `execute_payment` enforces `now >= next_payment_time` using ledger time, not wall-clock time. If `getLedgerTime()` fails, the engine logs it (`ledger_time_fallback`) and falls back to the local clock for that cycle only, so one bad RPC call never stalls polling.
+
+`checkFunding(schedule)` reads the token's `allowance(sender, schedule)` and `balance(sender)` and reports whether both cover `schedule.amount`. It's a read, exactly like the others — the engine decides what to do with the result.
 
 **Interface contract:**
 
@@ -118,6 +126,7 @@ interface IChainPoller {
   fetchScheduleStatus(scheduleId: string): Promise<ScheduleStatus>
   fetchRegistrySnapshot(): Promise<Schedule[]>
   getLedgerTime(): Promise<number>
+  checkFunding(schedule: Schedule): Promise<FundingCheck>
 }
 ```
 

@@ -107,8 +107,12 @@ export class SchedulerEngine {
     const now = await this.getCurrentTime();
 
     const dueSchedules = await this.poller.fetchDueSchedules(now);
-    dueSchedules
-      .filter((s) => !this.inFlight.has(s.scheduleId))
+    const notInFlight = dueSchedules.filter((s) => !this.inFlight.has(s.scheduleId));
+    const funded = await Promise.all(
+      notInFlight.map((s) => this.isSufficientlyFunded(s, now))
+    );
+    notInFlight
+      .filter((_, i) => funded[i])
       .forEach((s) => this.queue.enqueue(s));
 
     const toExecute = this.queue.dequeueDue(now);
@@ -138,6 +142,30 @@ export class SchedulerEngine {
       this.logger.logLedgerTimeFallback(error, fallback);
       return fallback;
     }
+  }
+
+  /**
+   * Check whether a due schedule's sender can currently cover its payment.
+   * Only 'recurring' schedules pull via allowance — 'stream' schedules are
+   * pre-funded escrow and always pass. Skipping an underfunded schedule here
+   * avoids wasting a build+simulate+submit cycle on a transaction the token
+   * contract would reject anyway, and keeps the failure logs clean.
+   */
+  private async isSufficientlyFunded(schedule: Schedule, now: number): Promise<boolean> {
+    if (schedule.scheduleType !== 'recurring') return true;
+
+    const funding = await this.poller.checkFunding(schedule);
+    if (!funding.sufficient) {
+      this.metrics.recordSkippedUnderfunded();
+      this.logger.logUnderfunded(
+        schedule.scheduleId,
+        schedule.amount,
+        funding.allowance,
+        funding.balance,
+        now
+      );
+    }
+    return funding.sufficient;
   }
 
   /** Run a single execution attempt, tracked so stop() can wait for it to finish. */

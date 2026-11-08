@@ -8,6 +8,7 @@ function makeSchedule(id: string, nextPaymentTime: number): Schedule {
     sender: 'G_SENDER',
     recipient: 'G_RECIPIENT',
     token: 'USDC',
+    amount: 100n,
     nextPaymentTime,
     status: 'active',
   };
