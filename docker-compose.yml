@@ -1,0 +1,8 @@
+services:
+  scheduler:
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "${METRICS_PORT:-9090}:${METRICS_PORT:-9090}"
+    restart: unless-stopped

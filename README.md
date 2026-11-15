@@ -206,6 +206,23 @@ npm test
 npm run test:run
 ```
 
+### Run with Docker
+
+Build and run the daemon in a container instead of a local Node install. Copy `.env.example` to `.env` and fill it in first (see Configure above) — `docker-compose.yml` loads it via `env_file`, and it's excluded from the image by `.dockerignore`.
+
+```bash
+docker compose up --build
+```
+
+Or without Compose:
+
+```bash
+docker build -t velox-scheduler .
+docker run --env-file .env -p 9090:9090 velox-scheduler
+```
+
+The image is a multi-stage build: dependencies and TypeScript are installed and compiled in a `builder` stage, then only the compiled `dist/` output and production dependencies (`npm ci --omit=dev`) are copied into the final `runtime` stage. No dev dependencies, source `.ts` files, or `.env` ship in the image.
+
 ---
 
 ## Project Structure
@@ -234,6 +251,9 @@ velox-scheduler/
 │   ├── queue/
 │   └── logger/
 ├── .env.example
+├── Dockerfile
+├── docker-compose.yml
+├── .dockerignore
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -262,11 +282,11 @@ This repository is part of the **Velox** open-source project built on the Stella
 - [x] `ExecutionQueue` — priority queue implementation
 - [x] `ChainPoller` — Soroban RPC integration
 - [x] `PaymentExecutor` — transaction builder and submitter
-- [x] `RetryHandler` — exponential backoff logic
+- [x] `RetryHandler` — exponential backoff with jitter
 - [x] `ExecutionLogger` — structured logging
 - [x] `SchedulerEngine` — main loop
 - [ ] Full test coverage (target: 95%+)
-- [ ] Docker support
+- [x] Docker support
 - [ ] Monitoring & alerting integration
 
 ---
