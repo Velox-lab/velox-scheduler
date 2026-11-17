@@ -157,7 +157,7 @@ Mocking is used extensively so the scheduler can be tested without a live Stella
 ### Prerequisites
 
 ```bash
-node >= 18.0.0
+node >= 22.12.0
 npm >= 9.0.0
 ```
 
@@ -223,6 +223,10 @@ docker run --env-file .env -p 9090:9090 velox-scheduler
 
 The image is a multi-stage build: dependencies and TypeScript are installed and compiled in a `builder` stage, then only the compiled `dist/` output and production dependencies (`npm ci --omit=dev`) are copied into the final `runtime` stage. No dev dependencies, source `.ts` files, or `.env` ship in the image.
 
+### Running This for Real
+
+The steps above get the daemon running locally. Actually operating it against testnet or mainnet, where to get `REGISTRY_CONTRACT_ID`, which RPC endpoint to use, how to read the logs, and the token-approval requirement senders need to know about, is covered in **[docs/OPERATING.md](docs/OPERATING.md)**.
+
 ---
 
 ## Project Structure
@@ -250,6 +254,8 @@ velox-scheduler/
 │   ├── executor/
 │   ├── queue/
 │   └── logger/
+├── docs/
+│   └── OPERATING.md
 ├── .env.example
 ├── Dockerfile
 ├── docker-compose.yml
