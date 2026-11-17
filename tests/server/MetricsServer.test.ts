@@ -1,3 +1,4 @@
+import * as http from 'http';
 import { AddressInfo } from 'net';
 import { MetricsServer } from '../../src/server/MetricsServer';
 import { SchedulerMetrics } from '../../src/metrics/SchedulerMetrics';
@@ -131,6 +132,26 @@ describe('MetricsServer', () => {
     it('resolves cleanly if called before start', async () => {
       server = new MetricsServer(new SchedulerMetrics(), POLL_INTERVAL_MS);
       await expect(server.stop()).resolves.toBeUndefined();
+    });
+
+    it('rejects if the underlying server fails to close', async () => {
+      metrics = new SchedulerMetrics();
+      ({ server, baseUrl } = startServer(metrics));
+      const closeError = new Error('close failed');
+      // Report an error to our callback, but still actually close the real
+      // socket via the original implementation, so the OS port is released
+      // and this test doesn't leak an open listener.
+      const originalClose = http.Server.prototype.close;
+      jest
+        .spyOn(http.Server.prototype, 'close')
+        .mockImplementation(function (this: http.Server, cb?: (err?: Error) => void) {
+          cb?.(closeError);
+          return originalClose.call(this);
+        });
+
+      await expect(server.stop()).rejects.toBe(closeError);
+
+      jest.restoreAllMocks();
     });
   });
 });

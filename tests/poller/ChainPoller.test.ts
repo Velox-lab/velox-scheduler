@@ -145,6 +145,11 @@ describe('ChainPoller', () => {
         'unknown schedule status: paused'
       );
     });
+
+    it('throws when the simulation succeeds but returns no value', async () => {
+      const { poller } = makePoller([{ result: {} }]);
+      await expect(poller.fetchScheduleStatus(SCHEDULE_A)).rejects.toThrow('returned no value');
+    });
   });
 
   describe('getLedgerTime', () => {
