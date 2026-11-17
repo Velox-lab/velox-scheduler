@@ -113,6 +113,22 @@ describe('PaymentExecutor', () => {
       });
     });
 
+    it('falls back to "unknown" when an ERROR status has no errorResult', async () => {
+      const server = makeServer({
+        sendTransaction: jest.fn(async () => ({
+          status: 'ERROR',
+          hash: 'tx_hash',
+        })),
+      });
+      const executor = makeExecutor(server);
+
+      const err = await executor
+        .submitTransaction(await buildSigned(executor))
+        .catch((e: Error) => e);
+
+      expect((err as Error).message).toBe('transaction rejected: unknown');
+    });
+
     it('throws a retryable error when asked to try again later', async () => {
       const server = makeServer({
         sendTransaction: jest.fn(async () => ({ status: 'TRY_AGAIN_LATER', hash: 'tx_hash' })),

@@ -166,6 +166,20 @@ describe('SchedulerEngine', () => {
       expect(logSpy).toHaveBeenCalledTimes(1);
       expect(logSpy.mock.calls[0][0].message).toBe('RPC unreachable');
     });
+
+    it('wraps a non-Error rejection from getLedgerTime before logging it', async () => {
+      const { engine, poller, logger } = setup();
+      const logSpy = jest.spyOn(logger, 'logLedgerTimeFallback');
+      poller.getLedgerTime.mockRejectedValue('string reason');
+      poller.fetchDueSchedules.mockResolvedValue([]);
+
+      await engine.runCycle();
+
+      expect(logSpy).toHaveBeenCalledTimes(1);
+      const loggedError = logSpy.mock.calls[0][0];
+      expect(loggedError).toBeInstanceOf(Error);
+      expect(loggedError.message).toBe('string reason');
+    });
   });
 
   describe('funding check', () => {
@@ -176,6 +190,17 @@ describe('SchedulerEngine', () => {
 
       await engine.runCycle();
 
+      expect(submit).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a non-recurring schedule as always funded, skipping the funding check entirely', async () => {
+      const { engine, poller, submit } = setup();
+      const streamSchedule = { ...makeSchedule('s1'), scheduleType: 'stream' as const };
+      poller.fetchDueSchedules.mockResolvedValue([streamSchedule]);
+
+      await engine.runCycle();
+
+      expect(poller.checkFunding).not.toHaveBeenCalled();
       expect(submit).toHaveBeenCalledTimes(1);
     });
 
@@ -397,6 +422,56 @@ describe('SchedulerEngine', () => {
       engine.start();
       await jest.advanceTimersByTimeAsync(0);
       await engine.stop();
+      await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+
+      expect(poller.fetchDueSchedules).toHaveBeenCalledTimes(1);
+    });
+
+    it('does nothing if start is called again while already running', async () => {
+      jest.useFakeTimers();
+      const { engine, poller } = setup();
+      poller.fetchDueSchedules.mockResolvedValue([]);
+
+      engine.start();
+      engine.start(); // second call must not schedule a duplicate cycle
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(poller.fetchDueSchedules).toHaveBeenCalledTimes(1);
+
+      await engine.stop();
+    });
+
+    it('wraps a non-Error cycle failure before logging it', async () => {
+      jest.useFakeTimers();
+      const { engine, poller, logger } = setup();
+      const logCycleError = jest.spyOn(logger, 'logCycleError');
+      poller.fetchDueSchedules.mockRejectedValueOnce('boom').mockResolvedValue([]);
+
+      engine.start();
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(logCycleError).toHaveBeenCalledTimes(1);
+      const loggedError = logCycleError.mock.calls[0][0];
+      expect(loggedError).toBeInstanceOf(Error);
+      expect(loggedError.message).toBe('boom');
+
+      await engine.stop();
+    });
+
+    it('does not schedule a new cycle if stopped while one is still in flight', async () => {
+      jest.useFakeTimers();
+      const { engine, poller } = setup();
+      let resolveFetch!: (schedules: ReturnType<typeof makeSchedule>[]) => void;
+      poller.fetchDueSchedules.mockImplementation(
+        () => new Promise((resolve) => (resolveFetch = resolve))
+      );
+
+      engine.start();
+      await jest.advanceTimersByTimeAsync(0); // cycle starts, suspended on fetchDueSchedules
+
+      await engine.stop(); // nothing in flight yet, resolves immediately
+      resolveFetch([]); // now let the already-started cycle finish
+      await jest.advanceTimersByTimeAsync(0); // flush the rest of runCycle + the reschedule guard
       await jest.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
 
       expect(poller.fetchDueSchedules).toHaveBeenCalledTimes(1);
