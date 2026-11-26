@@ -8,6 +8,7 @@ import { RetryHandler } from './executor/RetryHandler';
 import { ExecutionLogger } from './logger/ExecutionLogger';
 import { SchedulerMetrics } from './metrics/SchedulerMetrics';
 import { MetricsServer } from './server/MetricsServer';
+import { AlertNotifier } from './alerting/AlertNotifier';
 import { ConfigValidator } from './config/ConfigValidator';
 import { SchedulerConfig } from './types';
 
@@ -36,6 +37,7 @@ function loadConfig(): SchedulerConfig {
     maxRetryAttempts: parseInt(process.env.MAX_RETRY_ATTEMPTS ?? '3', 10),
     logLevel: process.env.LOG_LEVEL ?? 'info',
     metricsPort: parseInt(process.env.METRICS_PORT ?? '9090', 10),
+    alertWebhookUrl: process.env.ALERT_WEBHOOK_URL ?? null,
   };
 
   const { valid, errors } = new ConfigValidator().validate(config);
@@ -56,6 +58,9 @@ function buildEngine(config: SchedulerConfig): { engine: SchedulerEngine; metric
   const operatorKeypair = StellarSdk.Keypair.fromSecret(config.operatorSecretKey);
   const logger = new ExecutionLogger(config.logLevel);
   const metrics = new SchedulerMetrics();
+  const alertNotifier = new AlertNotifier(config.alertWebhookUrl, undefined, (error) =>
+    console.error('Failed to deliver alert webhook:', error.message)
+  );
 
   const engine = new SchedulerEngine({
     poller: new ChainPoller(
@@ -73,6 +78,7 @@ function buildEngine(config: SchedulerConfig): { engine: SchedulerEngine; metric
     metrics,
     operatorKeypair,
     pollIntervalMs: config.pollIntervalMs,
+    alertNotifier,
   });
 
   return { engine, metrics };

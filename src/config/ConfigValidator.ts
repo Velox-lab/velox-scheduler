@@ -23,6 +23,7 @@ export class ConfigValidator {
     this.validatePositiveInteger('pollIntervalMs', config.pollIntervalMs, errors);
     this.validatePositiveInteger('maxRetryAttempts', config.maxRetryAttempts, errors);
     this.validatePort('metricsPort', config.metricsPort, errors);
+    this.validateOptionalWebhookUrl(config.alertWebhookUrl, errors);
 
     return { valid: errors.length === 0, errors };
   }
@@ -78,6 +79,19 @@ export class ConfigValidator {
   private validatePort(field: string, value: number, errors: string[]): void {
     if (!Number.isInteger(value) || value < 1 || value > 65_535) {
       errors.push(`${field} must be a port number between 1 and 65535, got ${value}`);
+    }
+  }
+
+  /** Unset disables alerting entirely; if set, it must be a well-formed http(s) URL. */
+  private validateOptionalWebhookUrl(value: string | null, errors: string[]): void {
+    if (value === null) return;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        errors.push('alertWebhookUrl must use http or https');
+      }
+    } catch {
+      errors.push('alertWebhookUrl must be a valid URL');
     }
   }
 }

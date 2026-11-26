@@ -63,4 +63,6 @@ export interface SchedulerConfig {
   maxRetryAttempts: number;
   logLevel: string;
   metricsPort: number;
+  /** Webhook to POST execution-failure and cycle-error alerts to. Unset disables alerting. */
+  alertWebhookUrl: string | null;
 }

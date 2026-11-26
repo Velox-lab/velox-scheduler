@@ -11,6 +11,7 @@ function validConfig(): SchedulerConfig {
     maxRetryAttempts: 3,
     logLevel: 'info',
     metricsPort: 9090,
+    alertWebhookUrl: null,
   };
 }
 
@@ -111,6 +112,30 @@ describe('ConfigValidator', () => {
   it('accepts a valid metricsPort', () => {
     const config = { ...validConfig(), metricsPort: 3000 };
     expect(validator.validate(config).valid).toBe(true);
+  });
+
+  it('accepts a null alertWebhookUrl (alerting disabled)', () => {
+    const config = { ...validConfig(), alertWebhookUrl: null };
+    expect(validator.validate(config).valid).toBe(true);
+  });
+
+  it('accepts a valid https alertWebhookUrl', () => {
+    const config = { ...validConfig(), alertWebhookUrl: 'https://hooks.example.com/alert' };
+    expect(validator.validate(config).valid).toBe(true);
+  });
+
+  it('returns error when alertWebhookUrl is not a valid URL', () => {
+    const config = { ...validConfig(), alertWebhookUrl: 'not-a-url' };
+    const result = validator.validate(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('alertWebhookUrl must be a valid URL');
+  });
+
+  it('returns error when alertWebhookUrl uses a non-http(s) protocol', () => {
+    const config = { ...validConfig(), alertWebhookUrl: 'ftp://hooks.example.com/alert' };
+    const result = validator.validate(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('alertWebhookUrl must use http or https');
   });
 
   it('collects multiple errors at once', () => {

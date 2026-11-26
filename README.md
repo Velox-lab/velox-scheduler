@@ -97,6 +97,12 @@ Serves `SchedulerMetrics` over HTTP so an external monitor can check on the daem
 - `GET /metrics` — success, failure, retry and cycle counts, plus success rate, as JSON
 - `start(port)` / `stop()`
 
+### `AlertNotifier`
+Optional (disabled unless `ALERT_WEBHOOK_URL` is set). POSTs a JSON alert — Slack/Discord-compatible via a top-level `text` field — when a payment ultimately fails or a poll cycle throws. A broken webhook never affects execution: transport failures are reported to a callback, not thrown.
+
+- `notifyExecutionFailure(scheduleId, message, timestamp)`
+- `notifyCycleError(message, timestamp)`
+
 ---
 
 ## Architecture
@@ -108,7 +114,8 @@ velox-scheduler
 │   ├── ExecutionQueue       ← Priority queue of due payments
 │   ├── PaymentExecutor      ← Builds & submits transactions
 │   ├── RetryHandler         ← Handles failures and backoff
-│   └── ExecutionLogger      ← Audit trail of all executions
+│   ├── ExecutionLogger      ← Audit trail of all executions
+│   └── AlertNotifier        ← Optional webhook alerts on final failures
 ```
 
 ---
@@ -186,7 +193,10 @@ POLL_INTERVAL_MS=10000
 MAX_RETRY_ATTEMPTS=3
 LOG_LEVEL=info
 METRICS_PORT=9090
+ALERT_WEBHOOK_URL=
 ```
+
+`ALERT_WEBHOOK_URL` is optional. When set, the scheduler POSTs a JSON alert to it whenever a scheduled payment ultimately fails (retries exhausted or a non-retryable error) or a whole poll cycle throws. The payload includes a top-level `text` field, so it works unmodified with Slack and Discord incoming webhooks; leaving it unset disables alerting entirely with no behavior change otherwise.
 
 ### Run
 
@@ -245,6 +255,8 @@ velox-scheduler/
 │   │   └── ExecutionQueue.ts
 │   ├── logger/
 │   │   └── ExecutionLogger.ts
+│   ├── alerting/
+│   │   └── AlertNotifier.ts
 │   ├── types/
 │   │   └── index.ts
 │   └── index.ts
@@ -253,7 +265,8 @@ velox-scheduler/
 │   ├── poller/
 │   ├── executor/
 │   ├── queue/
-│   └── logger/
+│   ├── logger/
+│   └── alerting/
 ├── docs/
 │   └── OPERATING.md
 ├── .env.example
@@ -296,7 +309,7 @@ This repository is part of the **Velox** open-source project built on the Stella
       default-parameter fallbacks and a couple of defensive error-wrapping
       edge cases, not untested feature logic
 - [x] Docker support
-- [ ] Monitoring & alerting integration
+- [x] Monitoring & alerting integration — `ALERT_WEBHOOK_URL` POSTs a JSON alert (Slack/Discord-compatible) on a final execution failure or a cycle-level error
 
 ---
 

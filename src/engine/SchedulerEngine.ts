@@ -5,6 +5,7 @@ import { PaymentExecutor } from '../executor/PaymentExecutor';
 import { RetryHandler } from '../executor/RetryHandler';
 import { ExecutionLogger } from '../logger/ExecutionLogger';
 import { SchedulerMetrics } from '../metrics/SchedulerMetrics';
+import { AlertNotifier } from '../alerting/AlertNotifier';
 import { Schedule } from '../types';
 
 /**
@@ -20,6 +21,8 @@ export interface SchedulerEngineDeps {
   metrics: SchedulerMetrics;
   operatorKeypair: StellarSdk.Keypair;
   pollIntervalMs: number;
+  /** Optional: notified on a final execution failure or a cycle-level error. */
+  alertNotifier?: AlertNotifier;
 }
 
 /**
@@ -39,6 +42,7 @@ export class SchedulerEngine {
   private readonly metrics: SchedulerMetrics;
   private readonly operatorKeypair: StellarSdk.Keypair;
   private readonly pollIntervalMs: number;
+  private readonly alertNotifier: AlertNotifier | undefined;
 
   private running: boolean = false;
   private timer: NodeJS.Timeout | null = null;
@@ -57,6 +61,7 @@ export class SchedulerEngine {
     this.metrics = deps.metrics;
     this.operatorKeypair = deps.operatorKeypair;
     this.pollIntervalMs = deps.pollIntervalMs;
+    this.alertNotifier = deps.alertNotifier;
   }
 
   /** Start the scheduler daemon. Runs the first cycle immediately. */
@@ -196,11 +201,9 @@ export class SchedulerEngine {
         this.logger.logSuccess(schedule.scheduleId, result.hash, timestamp);
       } else {
         this.metrics.recordFailure();
-        this.logger.logFailure(
-          schedule.scheduleId,
-          new Error(`transaction ${result.hash} failed on-chain`),
-          timestamp
-        );
+        const message = `transaction ${result.hash} failed on-chain`;
+        this.logger.logFailure(schedule.scheduleId, new Error(message), timestamp);
+        void this.alertNotifier?.notifyExecutionFailure(schedule.scheduleId, message, timestamp);
       }
       this.release(schedule.scheduleId);
     } catch (err) {
@@ -235,6 +238,7 @@ export class SchedulerEngine {
     } else {
       this.metrics.recordFailure();
       this.logger.logFailure(schedule.scheduleId, new Error(error.message), timestamp);
+      void this.alertNotifier?.notifyExecutionFailure(schedule.scheduleId, error.message, timestamp);
       this.release(schedule.scheduleId);
     }
   }
@@ -266,7 +270,9 @@ export class SchedulerEngine {
         await this.runCycle();
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
-        this.logger.logCycleError(error, Math.floor(Date.now() / 1000));
+        const timestamp = Math.floor(Date.now() / 1000);
+        this.logger.logCycleError(error, timestamp);
+        void this.alertNotifier?.notifyCycleError(error.message, timestamp);
       }
       this.scheduleNextCycle();
     }, delayMs);
